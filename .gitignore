@@ -1,0 +1,77 @@
+# Ignore documentation exports
+*.pdf
+*.class
+
+# C/C++ Executables and Compiled Binaries
+*.exe
+*.out
+*.app
+*.elf
+
+# Object files and intermediate build artifacts
+*.o
+*.obj
+
+# gitignore does not affect files already being tracked.
+# Remove them from the Git index first:
+# git rm --cached <file>
+# git rm -r --cached .
+
+# Never commit secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Common build directories
+build/
+dist/
+out/
+.cache/
+vendor/
+node_modules/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python packaging metadata
+*.egg-info/
+.eggs/
+
+# Python test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Python build artifacts
+*.whl
+
+# Logs
+*.log
+
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+
+# Temporary IDE Lock and Backup Files
+.*~
+*~
+*.lck
+*.LCK*

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=77.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "expresso"
+version = "0.0.1"
+authors = [
+  { name="Jaeho Choi", email="jhc.jaehochoi@gmail.com" },
+]
+description = "Expresso is a lightweight exposure and diagnostic framework built around a 2D filtering matrix."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
