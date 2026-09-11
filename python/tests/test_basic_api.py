@@ -220,6 +220,26 @@ class TestBasicApi(unittest.TestCase):
         self.assertIn("[TestEngine]", captured[0])
         self.assertIn("Something went wrong: test", captured[0])
 
+    def test_exposure_lazy_error(self):
+        captured = self.capture()
+        exposure = Expresso.exposure("TestEngine")
+
+        calls = 0
+
+        def message():
+            nonlocal calls
+            calls += 1
+            return "Lazy error Yes message"
+
+        Expresso.setBridge(lambda text: captured.append(text))
+        exposure.err(message)
+
+        assert calls == 1
+        self.assertEqual(len(captured), 1)
+        self.assertIn("[TestEngine]", captured[0])
+        self.assertIn("Lazy error Yes message", captured[0])
+
+
     def test_error_with_exception(self):
         captured = self.capture()
 
@@ -353,6 +373,94 @@ class TestBasicApi(unittest.TestCase):
         self.assertEqual(Expresso.getCategories(), frozenset())
         self.assertEqual(Expresso.getLevels(), frozenset({ExposureLevel.LEVEL1}))
         self.assertEqual(Expresso.getCurrentEventCount(), 0)
+
+    def test_get_levels(self):
+        Expresso.setLevel(ExposureLevel.LEVEL3)
+
+        self.assertEqual(Expresso.getLevels(), frozenset({ExposureLevel.LEVEL3}))
+
+        Expresso.setLevels(ExposureLevel.LEVEL1, ExposureLevel.LEVEL5)
+
+        self.assertEqual(Expresso.getLevels(), frozenset({ ExposureLevel.LEVEL1, ExposureLevel.LEVEL5 }))
+
+        Expresso.setLevels()
+
+        self.assertEqual(Expresso.getLevels(), frozenset())
+
+    def test_index_range_end_only(self):
+        captured = self.capture()
+        exposure = Expresso.exposure("TestEngine")
+
+        Expresso.setLevel(ExposureLevel.LEVEL1)
+        Expresso.setIndexRange(3)
+
+        exposure.l1(ExposureCategory.DEBUG, "Event 1\n")
+        exposure.l1(ExposureCategory.DEBUG, "Event 2\n")
+        exposure.l1(ExposureCategory.DEBUG, "Event 3\n")
+        exposure.l1(ExposureCategory.DEBUG, "Event 4\n")
+
+        self.assertEqual(len(captured), 3)
+        self.assertIn("Event 1", captured[0])
+        self.assertIn("Event 2", captured[1])
+        self.assertIn("Event 3", captured[2])
+
+    def test_printf_category_level(self):
+        captured = self.capture()
+
+        Expresso.setLevel(ExposureLevel.LEVEL1)
+
+        Expresso.printf(ExposureCategory.DEBUG, ExposureLevel.LEVEL1, "A=%s B=%s\n", "one", 2)
+
+        self.assertEqual(len(captured), 1)
+        self.assertIn("A=one B=2", captured[0])
+        self.assertIn("[DEBUG]", captured[0])
+        self.assertIn("[LEVEL1]", captured[0])
+
+    def test_printf_with_identity(self):
+        captured = self.capture()
+
+        Expresso.setLevel(ExposureLevel.LEVEL1)
+
+        Expresso.printf("TestEngine", ExposureCategory.DEBUG, ExposureLevel.LEVEL1, "Identity test: %s\n", "working")
+
+        self.assertEqual(len(captured), 1)
+        self.assertIn("[TestEngine]", captured[0])
+        self.assertIn("[DEBUG]", captured[0])
+        self.assertIn("[LEVEL1]", captured[0])
+        self.assertIn("Identity test: working", captured[0])
+
+    def test_ansi_formatting_constants(self):
+        constants = [
+            "RESET", "BOLD", "DIM", "UNDERLINE", "LINEFEED", "FG_BLACK", 
+            "FG_RED", "FG_GREEN", "FG_YELLOW", "FG_BLUE", "FG_MAGENTA", 
+            "FG_CYAN", "FG_WHITE", "BG_BLACK", "BG_RED", "BG_GREEN", 
+            "BG_YELLOW", "BG_BLUE", "BG_MAGENTA", "BG_CYAN", "BG_WHITE",
+        ]
+
+        for name in constants:
+            value = getattr(Expresso, name, None)
+
+            self.assertIsNotNone(value, f"Expresso.{name} is not exposed")
+
+            if name == "LINEFEED":
+                self.assertEqual(value, Expresso.LINEFEED, "Expresso.LINEFEED must be the line-feed control code")
+            else:
+                self.assertIsInstance(value, str, f"Expresso.{name} must be a string")
+                self.assertNotEqual(value, "", f"Expresso.{name} must not be empty")
+
+    def test_diagnostic_tags_inherit_timing_metadata(self):
+        captured = self.capture()
+
+        Expresso.enableTimestamp(True)
+        Expresso.enableElapsedTime(True)
+        Expresso.enableDiagnosticTags(True)
+
+        Expresso.error("Diagnostic timing\n")
+
+        self.assertEqual(len(captured), 1)
+        self.assertIn("Diagnostic timing", captured[0])
+        self.assertRegex(captured[0], r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\]")
+        self.assertRegex(captured[0], r"\[\+\d+\.\d{3}ms\]")
 
 
 if __name__ == "__main__":

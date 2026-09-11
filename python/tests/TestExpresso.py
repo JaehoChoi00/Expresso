@@ -86,6 +86,7 @@ exposure.lbr(ExposureCategory.DEBUG, ExposureLevel.LEVEL1)
 print("\nERROR: ")
 
 exposure.err("Something went wrong: %s\n", "test")
+exposure.err(lambda: "Lazy error message\n")
 
 try:
     1 / 0

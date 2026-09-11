@@ -57,10 +57,13 @@ class Exposure:
         Expresso.LINEBREAK(category, requiredLevel)
 
     def err(self, formatString, *args):
+        if callable(formatString) and not args:
+            formatString = formatString()
+
         if self.identity is not None and str(self.identity).strip():
-            Expresso.error("[" + str(self.identity) + "] " + formatString, *args)
-        else:
-            Expresso.error(formatString, *args)
+            formatString = "[" + str(self.identity) + "] " + formatString
+
+        Expresso.error(formatString, *args)
 
     def here(self, label=None, customColor=None, customHeader=None):
         Expresso.hereAnnounce(identity=self.identity, customColor=customColor, customHeader=customHeader, label=label)

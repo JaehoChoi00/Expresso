@@ -398,12 +398,14 @@ public final class Expresso {
      */
     public static void setBridge(Consumer<String> outsideSystem) { externalBridge = outsideSystem; }
 
+    
     /**
-     * Resets Expresso into a fresh state.
-     * 
-     * Clears category and index filters, restores LEVEL1, resets the event counter, disables optional time tags,
-     * and removes the external bridge.
+     * Resets Expresso to its default runtime exposure state.
+     *
+     * Clears category and index filters, restores LEVEL1, resets the event counter,
+     * disables optional time tags, and removes the external bridge.
      */
+
     public static void reset() {
         clearAllCategories();
         setLevel(ExposureLevel.LEVEL1);

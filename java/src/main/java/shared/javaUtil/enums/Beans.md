@@ -1,14 +1,14 @@
 # Exposure Matrix Filter
 
-[:arrow_left: Return to Hub](/shared/SharedUtility.md)
+[⬅️ Return to Hub](https://github.com/JaehoChoi00/Expresso/blob/main/README.md)
 
-[:arrow_left: Return to Understanding Expresso](/shared/javaUtil/Expresso.md)
+[:arrow_left: Return to Understanding Expresso](/java/src/main/java/shared/javaUtil/Expresso.java)
 
 > What type of coffee bean, and what level of roast?
 
-> * [`ExposureLevel.java`](/shared/javaUtil/enums/ExposureLevel.java)
-> * [`ExposureCategory.java`](/shared/javaUtil/enums/ExposureCategory.java)
-> * [`ExposureTimeSource.java`](/shared/javaUtil/enums/ExposureTimeSource.java)
+> * [`ExposureLevel.java`](/java/src/main/java/shared/javaUtil/enums/ExposureLevel.java)
+> * [`ExposureCategory.java`](//java/src/main/java/shared/javaUtil/enums/ExposureCategory.java)
+> * [`ExposureTimeSource.java`](/java/src/main/java/shared/javaUtil/enums/ExposureTimeSource.java)
 
 ## Sections
 
@@ -41,7 +41,9 @@ Expresso uses two independent dimensions to determine what becomes visible:
             DEBUG        LEVEL 3     Intermediate
             COMPONENTIAL LEVEL 4     Internal
             LOWERLEVEL   LEVEL 5     Primitive
+            BITWISE
             TEST
+            + dynamic categories
 ```
 
 The **Category** is your choice of **Coffee bean**:
@@ -77,32 +79,43 @@ The active configuration decides whether that combination is exposed.
 
 ```java
 
-public enum ExposureCategory {
+@FunctionalInterface
+public interface ExposureCategory {
+    String name();
 
-    /** Regular unfiltered mode. */
-    VANILLA,
+    /** Regular unfiltered raw output mode. */
+    ExposureCategory VANILLA = () -> "VANILLA";
 
-    /** System log or system-related calls. */
-    SYSTEMLOG,
+    /** System lifecycle events, runtime initialization, and low-level engine calls. */
+    ExposureCategory SYSTEMLOG = () -> "SYSTEMLOG";
 
-    /** Regular debugging information. */
-    DEBUG,
+    /** Standard debugging traces and temporary developmental observations. */
+    ExposureCategory DEBUG = () -> "DEBUG";
 
-    /** Major system building blocks such as ALU, registers, components. */
-    COMPONENTIAL,
+    /** Major architectural building blocks, stage boundaries, and subsystem pipelines (e.g., SHA-256 stages, ALU, Registers). */
+    ExposureCategory COMPONENTIAL = () -> "COMPONENTIAL";
 
-    /** Low-level diagnostic tracing such as variables and primitive operations. */
-    LOWERLEVEL,
+    /** Structural data transformations, intermediate arrays, 32-bit schedule dumps, and byte-level state vectors. */
+    ExposureCategory LOWERLEVEL = () -> "LOWERLEVEL";
 
     /** Atomic bit-level operations, logic gates (XOR, AND, OR), bit shifts, and carry bit propagations. */
-    BITWISE,
+    ExposureCategory BITWISE = () -> "BITWISE";
 
-    /** Testing-related information. */
-    TEST
+    /** Test execution suites, assertions, and verification diagnostic traces. */
+    ExposureCategory TEST = () -> "TEST";
+
+    /**
+     * @param categoryName The string identifier for the dynamic category (e.g., "PHYSICS", "NEURAL").
+     * @return A new {@link ExposureCategory} instance bound to the normalized category name.
+     */
+    static ExposureCategory of(String customName) {
+        String normalized = customName.trim().toUpperCase();
+        return () -> normalized;
+    }
 }
 ```
 
-### Category Intuition
+### [`Category Intuition`](#exposurecategory)
 
 ```txt
 VANILLA
@@ -133,6 +146,19 @@ BITWISE
 TEST
 └── Testing and validation output
 ```
+
+### [`Dynamic Categories`](#exposurecategory)
+
+Applications can also define their own categories.
+
+```java
+ExposureCategory physics = ExposureCategory.of("PHYSICS");
+ExposureCategory neural = ExposureCategory.of("NEURAL");
+
+Expresso.printf(physics, ExposureLevel.LEVEL3, "Velocity = %.2f", velocity);
+```
+
+### [`Category Selection`](#exposurecategory)
 
 Categories can be explicitly selected:
 
@@ -614,7 +640,11 @@ The complete model can therefore be thought of as:
  LOWERLEVEL    │        │        │        │        │        │
                ├────────┼────────┼────────┼────────┼────────┤
  TEST          │        │        │        │        │        │
+               ├────────┼────────┼────────┼────────┼────────┤
+ DYNAMIC       │        │        │        │        │        │
                └────────┴────────┴────────┴────────┴────────┘
+
+
                                      │
                                      ▼
                         isExposed(category, level)

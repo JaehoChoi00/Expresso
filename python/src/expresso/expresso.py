@@ -356,6 +356,8 @@ class Expresso:
 
     @staticmethod
     def error(formatString, *args):
+        if callable(formatString) and not args: formatString = formatString()
+            
         exception = None
         formattingArgs = list(args)
 

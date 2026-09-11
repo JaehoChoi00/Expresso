@@ -1,15 +1,15 @@
 # Python Implementation
 
-[:arrow_left: Return to Hub](../README.md)
+[Return to Hub](https://github.com/JaehoChoi00/Expresso/blob/main/README.md)
 
 ## Code
 
-> * [`expresso.py`](/python/src/expresso/expresso.py)
-> * [`exposure.py`](/python/src/expresso/exposure.py)
-> * [`variable_constants.py`](/python/src/expresso/variable_constants.py)
-> * [`exposure_category.py`](/python/src/expresso/enums/exposure_category.py)
-> * [`exposure_level.py`](/python/src/expresso/enums/exposure_level.py)
-> * [`exposure_time_source.py`](/python/src/expresso/enums/exposure_time_source.py)
+> * [`expresso.py`](https://github.com/JaehoChoi00/Expresso/blob/main/python/src/expresso/expresso.py)
+> * [`exposure.py`](https://github.com/JaehoChoi00/Expresso/blob/main/python/src/expresso/exposure.py)
+> * [`variable_constants.py`](https://github.com/JaehoChoi00/Expresso/blob/main/python/src/expresso/variable_constants.py)
+> * [`exposure_category.py`](https://github.com/JaehoChoi00/Expresso/blob/main/python/src/expresso/enums/exposure_category.py)
+> * [`exposure_level.py`](https://github.com/JaehoChoi00/Expresso/blob/main/python/src/expresso/enums/exposure_level.py)
+> * [`exposure_time_source.py`](https://github.com/JaehoChoi00/Expresso/blob/main/python/src/expresso/enums/exposure_time_source.py)
 
 ## Sections
 
@@ -21,7 +21,7 @@
 > * [`Time Sources & Runtime Timing`](#time-sources--runtime-timing)
 > * [`Bridges & Pipelines`](#bridges--pipelines)
 > * [`Formatting & Diagnostic Actions`](#formatting--diagnostic-actions)
-> * [`Exposure Facade`](#exposure-facade)
+> * [`Exposure Depth`](#exposure-depth)
 > * [`Core API Integration`](#core-api-integration)
 
 ---
@@ -101,15 +101,43 @@ The central design principle is:
 
 ### [`Installation & Build`](#sections)
 
+> * [Requirements](#requirements)
+> * [Installing from PyPI](#install-from-pypi)
+> * [Installing from the Repository](#installing-from-the-repository)
+> * [Verify the Installation](#verify-the-installation)
+> * [Run the Test Suite](#run-the-test-suite)
+> * [Build the Package](#build-the-package)
+> * [Install the Built Package](#install-the-built-package)
+> * [Development Workflow](#development-workflow)
+> * [Installation Summary](#installation-summary)
+
+---
+
 The Python implementation is distributed as a standard Python package and can be installed using `pip`.
 
-#### Requirements
+#### [Requirements](#installation--build)
 
 - Python 3.9 or newer
 - `pip`
 - A virtual environment is recommended
 
-#### Install from the Repository
+#### [Install from PyPI](#installation--build)
+
+***Syntax: Bash***
+
+```bash
+python -m pip install expresso-framework
+```
+
+***Syntax: Project import***
+
+```py
+from expresso import Expresso, Exposure, ExposureCategory, ExposureLevel, ExposureTimeSource
+```
+
+---
+
+#### [Installing from the Repository](#installation--build)
 
 ***Syntax: Bash***
 
@@ -125,7 +153,7 @@ python -m pip install -e .
 > [!NOTE]
 > The `-e` flag installs Expresso in **editable mode**, allowing changes made to the source code to be reflected immediately without reinstalling the package.
 
-#### Verify the Installation
+#### [Verify the Installation](#installation--build)
 
 ***Syntax: Bash***
 
@@ -139,7 +167,7 @@ python -c "from expresso import Expresso, Exposure, ExposureCategory, ExposureLe
 Import Complete
 ```
 
-#### Run the Test Suite
+#### [Run the Test Suite](#installation--build)
 
 ***Syntax: Bash***
 
@@ -151,14 +179,14 @@ python -m unittest discover -s tests -v
 
 ```txt
 ----------------------------------------------------------------------
-Ran 24 tests in 0.001s
+Ran 31 tests
 
 OK
 ```
 >[!NOTE] 
 >The execution time may vary depending on the system.
 
-#### Build the Package
+#### [Build the Package](#installation--build)
 
 Install the Python build frontend:
 
@@ -180,11 +208,11 @@ Generated distribution files are placed inside the `dist/` directory:
 
 ```txt
 dist/
-├── expresso-<version>-py3-none-any.whl
-└── expresso-<version>.tar.gz
+├── expresso_framework-<version>-py3-none-any.whl
+└── expresso_framework-<version>.tar.gz
 ```
 
-#### Install the Built Package
+#### [Install the Built Package](#installation--build)
 
 ***Syntax: Bash***
 
@@ -200,7 +228,7 @@ Verify installation:
 python -c "from expresso import Expresso, Exposure, ExposureCategory, ExposureLevel; print('Import Complete')"
 ```
 
-#### Development Workflow
+#### [Development Workflow](#installation--build)
 
 For normal development:
 
@@ -245,7 +273,7 @@ dist/
     └── Source Distribution (.tar.gz)
 ```
 
-#### Installation Summary
+#### [Installation Summary](#installation--build)
 
 Local setup:
 
@@ -289,7 +317,16 @@ Fetches an ANSI indexed 256-color foreground or background escape sequence.
 
 ### [`Configuration Methods`](#sections)
 
-#### Level Filtering
+> * [Level Filtering](#level-filtering)
+> * [Category Filtering](#category-filtering)
+> * [Tag Visibility](#tag-visibility)
+> * [Event Index Filtering](#event-index-filtering)
+> * [Reset](#reset)
+> * [Diagnostic Styling](#diagnostic-styling)
+
+---
+
+#### [Level Filtering](#configuration-methods)
 
 ```py
 Expresso.setLevel(newLevel)
@@ -303,11 +340,12 @@ Expresso.getLevels()
 
 `setLevels()` activates **Explicit Mode** when multiple levels are supplied.
 
-An empty level set prevents all exposure events from being emitted.
+> [!NOTE]
+> An empty level set prevents all exposure events from being emitted.
 
 ---
 
-#### Category Filtering
+#### [Category Filtering](#configuration-methods)
 
 ```py
 Expresso.setCategory(category)
@@ -327,7 +365,7 @@ An empty category set acts as an unrestricted category filter.
 
 ---
 
-#### Tag Visibility
+#### [Tag Visibility](#configuration-methods)
 
 ```py
 Expresso.enableIndexTag(enable)
@@ -345,13 +383,14 @@ Expresso.enableElapsedTime(enable)
 Expresso.enableApplicationTime(enable)
 ```
 
-Index, identity, category, and level tags are enabled by default.
-
-Timestamp, elapsed time, and application time are disabled by default.
+> [!NOTE]
+> Index, identity, category, and level tags are enabled by default.
+> 
+> Timestamp, elapsed time, and application time are disabled by default.
 
 ---
 
-#### Event Index Filtering
+#### [Event Index Filtering](#configuration-methods)
 
 ```py
 Expresso.setIndexRange(start, end)
@@ -367,21 +406,33 @@ Expresso.resetEventCounter()
 Expresso.getCurrentEventCount()
 ```
 
-The event index represents Expresso exposure events and is independent of any event, frame, or lifecycle counter maintained by the consuming application.
-
-The global event counter allows specific sections of an execution trace to be isolated without modifying the original exposure statements.
+> [!NOTE]
+> The event index represents Expresso exposure events and is independent of any event, frame, or lifecycle counter maintained by the consuming application.
+> 
+> The global event counter allows specific sections of an execution trace to be isolated without modifying the original exposure statements.
 
 ---
 
-#### Reset
+#### [Reset](#configuration-methods)
 
 ```py
-Expresso.reset()
+def reset():
+    Expresso.clearAllCategories()
+    Expresso.setLevel(ExposureLevel.LEVEL1)
+    Expresso.clearIndexFilter()
+    Expresso.resetEventCounter()
+    Expresso.enableTimestamp(False)
+    Expresso.enableElapsedTime(False)
+    Expresso.enableApplicationTime(False)
+    Expresso.setBridge(None)
 ```
+
 
 `reset()` restores Expresso to its default runtime state, including exposure filters, event indexing, timing options, and external bridge configuration.
 
-#### Diagnostic Styling
+---
+
+#### [Diagnostic Styling](#configuration-methods)
 
 ```py
 Expresso.setErrorStyle(color, prefix)
@@ -403,16 +454,14 @@ When enabled, unrestricted diagnostic events such as `error()` and `hereAnnounce
 
 ### [`Dual-Mode Evaluation Logic`](#sections)
 
-Expresso uses the number of enabled exposure levels to determine its filtering mode.
+Expresso determines its filtering mode from the number of enabled exposure levels.
 
 ```py
 @staticmethod
 def isExposed(category, requiredLevel):
     if category is None or requiredLevel is None: return False
-
     with Expresso.categoriesLock:
         activeCategories = Expresso.enabledCategories
-
         if activeCategories and category.name not in activeCategories:
             return False
 
@@ -447,7 +496,7 @@ LEVEL4 -> hidden
 LEVEL5 -> hidden
 ```
 
-The active level acts as a **floor threshold**.
+The active level defines the **maximum exposure depth**.
 
 ---
 
@@ -473,6 +522,10 @@ This allows non-contiguous exposure selection.
 
 ### [`Time Sources & Runtime Timing`](#sections)
 
+> * [Application Time](#application-time)
+> * [Wall-Clock Timestamp](#wall-clock-timestamp)
+> * [Expresso Runtime Elapsed Time](#expresso-runtime-elapsed-time)
+
 Expresso separates three concepts of time.
 
 ```txt
@@ -493,7 +546,7 @@ Time
 
 ---
 
-#### Application Time
+#### [Application Time](#time-sources--runtime-timing)
 
 Applications can provide their own concept of time:
 
@@ -531,7 +584,7 @@ This allows Expresso to integrate with systems whose internal notion of time is 
 
 ---
 
-#### Wall-Clock Timestamp
+#### [Wall-Clock Timestamp](#time-sources--runtime-timing)
 
 ```py
 Expresso.enableTimestamp(True)
@@ -553,7 +606,7 @@ This provides a human-readable real-world date and time.
 
 ---
 
-#### Expresso Runtime Elapsed Time
+#### [Expresso Runtime Elapsed Time](#time-sources--runtime-timing)
 
 ```py
 Expresso.enableElapsedTime(True)
@@ -653,7 +706,7 @@ This creates a separation between:
 
 ### [`Formatting & Diagnostic Actions`](#sections)
 
-#### Structured Exposure
+#### [Structured Exposure](#formatting--diagnostic-actions)
 
 ```py
 Expresso.printf(category, requiredLevel, formatString, *args)
@@ -667,7 +720,7 @@ Expresso.printf(identity, category, requiredLevel, formatString, *args)
 
 ---
 
-#### Structural Formatting
+#### [Structural Formatting](#formatting--diagnostic-actions)
 
 ```py
 Expresso.NEWLINE(category, requiredLevel)
@@ -685,25 +738,29 @@ Expresso.LINEBREAK(category, requiredLevel)
 
 ---
 
-#### Unrestricted Error Reporting
+#### [Error Reporting](#formatting--diagnostic-actions)
+
+**Global diagnostic reporting**
 
 ```py
 Expresso.error(formatString, *args)
 ```
 
-`error()` bypasses the normal exposure matrix.
+> `error()` bypasses the normal exposure matrix.
 
-A trailing Python exception is automatically extracted:
+**Identity-bound diagnostic reporting**
 
 ```py
 exposure.err("Division failed\n", exception)
 ```
 
+> `err()` bypasses the normal exposure matrix and associates the diagnostic event with the `Exposure` identity.
+
 The complete traceback is then emitted.
 
 ---
 
-#### Execution Markers
+#### [Execution Markers](#formatting--diagnostic-actions)
 
 ```py
 Expresso.hereAnnounce()
@@ -715,7 +772,7 @@ These provide high-visibility execution markers for identifying code paths.
 
 ---
 
-### [`Exposure Facade`](#sections)
+### [`Exposure Depth`](#sections)
 
 `Exposure` is the instance-bound developer-facing interface for `Expresso`.
 
@@ -752,8 +809,10 @@ The generic method can also receive a callable.
 ```py
 exposure.l3(ExposureCategory.DEBUG, lambda: expensiveDiagnosticCalculation())
 ```
-
-The callable is evaluated **only when the category and level pass the active exposure filter**.
+> [!NOTE]
+> The callable is evaluated **only when the category and level pass the active exposure filter**.
+> 
+> Unrestricted diagnostic methods such as `err()` evaluate their callable when the diagnostic event is emitted.
 
 ---
 
@@ -815,20 +874,20 @@ except Exception as exception:
 #### Example Output
 
 ```txt
-[BRIDGE PIPELINE LOG]: [2026-09-08 00:34:34.189] [#1] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY
+[BRIDGE PIPELINE LOG]: [2026-09-11 15:26:24.250] [#1] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY
 
-[BRIDGE PIPELINE LOG]: [2026-09-08 00:34:34.189] [#2] [ALU] [LOWERLEVEL] [LEVEL5] NAND Gate Transistor Logic Validated.
+[BRIDGE PIPELINE LOG]: [2026-09-11 15:26:24.250] [#2] [ALU] [LOWERLEVEL] [LEVEL5] NAND Gate Transistor Logic Validated.
 
-[BRIDGE PIPELINE LOG]:
+[BRIDGE PIPELINE LOG]: 
 --------------------------------
 
-[BRIDGE PIPELINE LOG]: --> [EXPRESSO REPORT HERE]: [ALU]
+[BRIDGE PIPELINE LOG]: [ALU] --> [EXPRESSO REPORT HERE]
 
-[BRIDGE PIPELINE LOG]: --> [EXPRESSO REPORT HERE]: [ALU] This is the label.
+[BRIDGE PIPELINE LOG]: [ALU] --> [EXPRESSO REPORT HERE]: This is the label.
 
 [BRIDGE PIPELINE LOG]: [ERROR]: [ALU] Execution failed during register calculation [DIV_ZERO]:
 
-Traceback ...
+Traceback...
 ZeroDivisionError: division by zero
 ```
 
@@ -854,7 +913,6 @@ Expresso is divided into separate responsibilities:
                     └──────────┬───────────┘
                                │
                                ▼
-
     ┌───────────────────────────────────────────────────────┐
     │                       EXPRESSO                        │
     │                                                       │
@@ -881,3 +939,5 @@ The application owns its state.
 The application owns its concept of time.
 
 Expresso decides **what becomes visible**, how it is tagged, and where the resulting exposure stream is routed.
+
+[Back to beginning](#python-implementation)
