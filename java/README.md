@@ -22,6 +22,7 @@
 > * [`Formatting & Diagnostic Actions`](#formatting--diagnostic-actions)
 > * [`Exposure Depth`](#exposure-depth)
 > * [`Core API Integration`](#core-api-integration)
+> * [`Design Philosophy`](#design-philosophy)
 
 ---
 
@@ -1008,4 +1009,8 @@ The application owns its state.
 
 The application owns its concept of time.
 
-Expresso decides **what becomes visible**, how it is tagged, and where the resulting exposure stream is routed.
+Expresso decides **what becomes visible**, how it is tagged, and where the resulting exposure stream is routed. 
+
+It does not decide what the consuming application should do with that information.
+
+[:arrow_up: Return to Top](#java-implementation)

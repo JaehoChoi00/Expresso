@@ -43,4 +43,5 @@
 
 > * [`Java`](/java/README.md)
 > * [`Python`](/python/README.md)
-> * *C - Pending*
+> * [`C`](/c/README.md)
+> * *C++ Pending*

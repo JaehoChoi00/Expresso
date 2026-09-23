@@ -39,7 +39,8 @@ public final class Exposure {
     public void expose(ExposureCategory category, ExposureLevel level, String format, Object... args) {
         Expresso.printf(identity, category, level, format, args);
     }
-/**
+    
+    /**
      * Shorthand for logging a formatted message at {@link ExposureLevel#LEVEL1}.
      *
      * @param category The logging category.
