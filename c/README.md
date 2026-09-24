@@ -1,7 +1,6 @@
 # C Implementation
 
-[⬅️ Return to Hub](../README.md)
-[➡️ Understand `Exposure Level, Exposure Category, Exposure Time Source`](../README.md)
+[⬅️ Return to Hub](https://github.com/JaehoChoi00/Expresso/blob/main/README.md)
 
 ## Code
 
