@@ -108,12 +108,12 @@ The central design principle is:
 
 The C implementation is designed as a native C library.
 
-It can be built directly from source or integrated into another C project as a library.
+It can be built directly from source, integrated into another C project as a library, or installed as a reusable CMake package.
 
 > * [`Requirements`](#requirements)
 > * [`Build`](#build)
-> * [`Run-the-test-suite`](#run-the-test-suite)
-> * [`Run-the-thread-test`](#run-the-thread-test)
+> * [`Distribution`](#distribution)
+> * [`Run the Test Suite`](#run-the-test-suite)
 > * [`Development Workflow`](#development-workflow)
 
 #### [Requirements](#installation--build)
@@ -121,8 +121,12 @@ It can be built directly from source or integrated into another C project as a l
 The C implementation requires:
 
 * C compiler with C11 support
+
 * Standard C library
+
 * POSIX threads (`pthread`) for the current thread-safe runtime implementation
+
+* CMake
 
 On macOS, the implementation can be compiled using Clang.
 
@@ -130,32 +134,194 @@ On Linux, GCC or Clang can be used.
 
 #### [Build](#installation--build)
 
-> [!IMPORTANT]
-> BUILD SECTION PENDING 
+The C implementation uses CMake to configure and build Expresso as a static library.
+
+From the `c/` directory:
+
+```bash
+cmake -S . -B build
+cmake --build build
+```
+
+After a successful build, the build directory contains:
+
+```text
+build/
+
+├── libexpresso.a
+├── ExpressoTest
+├── LibraryTest
+└── ThreadTest
+```
+
+The resulting `libexpresso.a` can be distributed and linked into other C projects.
+
+The public headers are located in:
+
+```text
+include/
+
+└── expresso/
+
+    ├── Expresso.h
+    ├── Exposure.h
+    ├── ExposureCategory.h
+    ├── ExposureLevel.h
+    ├── ExposureTimeSource.h
+    └── VariableConstants.h
+```
+
+A consuming C project requires the compiled library and the public headers:
+
+```text
+lib/
+
+└── libexpresso.a
+
+include/
+
+└── expresso/
+
+    ├── Expresso.h
+    ├── Exposure.h
+    ├── ExposureCategory.h
+    ├── ExposureLevel.h
+    ├── ExposureTimeSource.h
+    └── VariableConstants.h
+```
+
+The generated library can then be linked with a C compiler:
+
+```bash
+gcc main.c \
+    -Iinclude \
+    -Llib \
+    -lexpresso \
+    -pthread \
+    -o MyProgram
+```
+
+`-I` specifies the location of the Expresso headers.
+
+`-L` specifies the location of the directory containing `libexpresso.a`.
+
+`-lexpresso` links the Expresso static library.
+
+`-pthread` enables the POSIX thread support required by the current C implementation.
+
+#### [Distribution](#installation--build)
+
+Expresso can be distributed as a self-contained C library package containing the compiled static library and public headers.
+
+A basic distribution can have the following structure:
+
+```text
+Expresso/
+
+├── lib/
+│   └── libexpresso.a
+│
+└── include/
+    └── expresso/
+        ├── Expresso.h
+        ├── Exposure.h
+        ├── ExposureCategory.h
+        ├── ExposureLevel.h
+        ├── ExposureTimeSource.h
+        └── VariableConstants.h
+```
+
+A consuming project can copy or extract this package and link Expresso directly without installing Expresso globally.
+
+Expresso also provides CMake package configuration files for projects that use CMake.
+
+The package can be installed locally with:
+
+```bash
+cmake --install build --prefix ./install
+```
+
+This produces an install tree containing the library, public headers, and CMake package configuration:
+
+```text
+install/
+
+├── lib/
+│   ├── libexpresso.a
+│   └── cmake/
+│       └── Expresso/
+│           ├── ExpressoConfig.cmake
+│           ├── ExpressoConfigVersion.cmake
+│           └── ExpressoTargets.cmake
+│
+└── include/
+    └── expresso/
+        ├── Expresso.h
+        ├── Exposure.h
+        ├── ExposureCategory.h
+        ├── ExposureLevel.h
+        ├── ExposureTimeSource.h
+        └── VariableConstants.h
+```
+
+A CMake project can then locate the installed Expresso package with:
+
+```cmake
+find_package(Expresso REQUIRED)
+
+target_link_libraries(MyProgram
+    PRIVATE
+        Expresso::expresso
+)
+```
+
+When the package is installed in a custom location, the consuming project can provide that location through `CMAKE_PREFIX_PATH`:
+
+```bash
+cmake -S . -B build \
+    -DCMAKE_PREFIX_PATH=/path/to/Expresso/install
+```
+
+This allows Expresso to be distributed as a reusable CMake package without requiring the consuming project to copy Expresso's source files into its own project.
 
 #### [Run the Test Suite](#installation--build)
 
-Expresso includes a C test program covering the core runtime behavior.
+Expresso includes three C test programs:
 
-Compile the test:
+* [ExpressoTest](/c/test/ExpressoTest.c) — verifies core Expresso behavior
+* [LibraryTest](/c/test/LibraryTest.c) — verifies that Expresso can be consumed as a compiled static library
+* [ThreadTest](/c/test/ThreadTest.c) — verifies concurrent event generation and event-counter behavior
 
-```bash
-gcc -Wall -Wextra -Wpedantic -pthread \
-    test/ExpressoTest.c \
-    src/Expresso.c \
-    src/Exposure.c \
-    src/ExposureCategory.c \
-    -Iinclude \
-    -o ExpressoTest
-```
+The tests are built automatically by CMake.
 
-Run it:
+After building:
 
 ```bash
-./ExpressoTest
+cmake --build build
 ```
 
-The test suite verifies core Expresso behavior, including:
+Run all registered tests with CTest:
+
+```bash
+ctest --test-dir build
+```
+
+A successful run reports:
+
+```text
+    Start 1: ExpressoTest
+1/3 Test #1: ExpressoTest .....................   Passed    0.00 sec
+
+    Start 2: LibraryTest
+2/3 Test #2: LibraryTest ......................   Passed    0.00 sec
+
+    Start 3: ThreadTest
+3/3 Test #3: ThreadTest .......................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 3
+```
+
+The test suite covers core Expresso behavior, including:
 
 * Exposure creation
 * Identity handling
@@ -182,46 +348,23 @@ The test suite verifies core Expresso behavior, including:
 * Event counter behavior
 * Reset behavior
 
-A successful run ends with:
-
-```text
-Final event count: 0
-TEST SUITE COMPLETE
-```
-
-#### [Run the Thread Test](#installation--build)
-
-Expresso also includes a concurrent test for the global event counter.
-
-Compile:
+***To run only the thread test:***
 
 ```bash
-gcc -Wall -Wextra -Wpedantic -pthread \
-    test/ThreadTest.c \
-    src/Expresso.c \
-    src/Exposure.c \
-    src/ExposureCategory.c \
-    -Iinclude \
-    -o ThreadTest
+ctest --test-dir build -R ThreadTest
 ```
 
-Run:
-
-```bash
-./ThreadTest
-```
-
-The test creates multiple threads that simultaneously generate exposure events.
-
-A successful run reports:
+***A successful run reports:***
 
 ```text
-Expected event count: 400
-Actual event count:   400
-PASS: Event counter is thread-safe.
-```
+    Start 3: ThreadTest
 
-The test verifies the atomicity of the global event counter under concurrent exposure generation.
+1/1 Test #3: ThreadTest .......................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.01 sec
+```
 
 #### [Development Workflow](#installation--build)
 
@@ -231,43 +374,55 @@ The normal development cycle is:
 Modify Source
      │
      ▼
-Compile
+
+Configure CMake
      │
      ▼
-Run Test Suite
+
+Build Library and Tests
      │
      ▼
-Run Thread Test
+
+Run CTest
      │
      ▼
+
 Verify Behavior
      │
      ▼
-Distribute
+
+Install or Distribute
+
 ```
 
 From the `c/` directory:
 
 ```bash
-gcc -Wall -Wextra -Wpedantic -pthread \
-    test/ExpressoTest.c \
-    src/Expresso.c \
-    src/Exposure.c \
-    src/ExposureCategory.c \
-    -Iinclude \
-    -o ExpressoTest
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build
 
-./ExpressoTest
+# To run a specific test directly:
 
-gcc -Wall -Wextra -Wpedantic -pthread \
-    test/ThreadTest.c \
-    src/Expresso.c \
-    src/Exposure.c \
-    src/ExposureCategory.c \
-    -Iinclude \
-    -o ThreadTest
+./build/ExpressoTest
 
-./ThreadTest
+./build/LibraryTest
+
+./build/ThreadTest
+
+# To perform a clean rebuild:
+
+rm -rf build
+
+cmake -S . -B build
+
+cmake --build build
+
+ctest --test-dir build
+
+# To install Expresso locally:
+
+cmake --install build --prefix ./install
 ```
 
 ---

@@ -34,6 +34,10 @@ int main(void) {
     reset();
     setLevel(LEVEL1);
     setCategory(EXPOSURE_TEST);
+    enableDiagnosticTags(true);
+    enableTimestamp(true);
+    enableElapsedTime(true);
+    enableApplicationTime(true);
 
     printf("Threads: %d\n", THREAD_COUNT);
     printf("Exposures per thread: %d\n", EXPOSURES_PER_THREAD);
