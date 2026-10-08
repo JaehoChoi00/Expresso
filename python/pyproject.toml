@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "expresso-framework"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
-  { name="Jaeho Choi", email="jhc.jaehochoi@gmail.com" },
+  { name = "Jaeho Choi", email = "jhc.jaehochoi@gmail.com" },
 ]
 description = "Expresso is a lightweight exposure and diagnostic framework built around a 2D filtering matrix."
 readme = "README.md"

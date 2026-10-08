@@ -283,7 +283,16 @@ Fetches an ANSI indexed 256-color foreground or background escape sequence.
 
 ### [Configuration Methods](#sections)
 
-#### Level Filtering
+> [Level Filtering](#level-filtering)
+> [Category Filtering](#category-filtering)
+> [Tag Visibility](#tag-visibility)
+> [Event Index Filtering](#event-index-filtering)
+> [Reset](#reset)
+> [Diagnostic Styling](#diagnostic-styling)
+
+---
+
+#### [Level Filtering](#configuration-methods)
 
 ```java
 public static void setLevel(ExposureLevel newLevel);
@@ -301,7 +310,7 @@ An empty level set prevents all exposure events from being emitted.
 
 ---
 
-#### Category Filtering
+#### [Category Filtering](#configuration-methods)
 
 ```java
 public static void setCategory(ExposureCategory category);
@@ -329,7 +338,7 @@ Category filtering is based on the normalized category name.
 
 ---
 
-#### Tag Visibility
+#### [Tag Visibility](#configuration-methods)
 
 ```java
 public static void enableIndexTag(boolean enable);
@@ -353,7 +362,7 @@ Timestamp, elapsed time, and application time are disabled by default.
 
 ---
 
-#### Event Index Filtering
+#### [Event Index Filtering](#configuration-methods)
 
 ```java
 public static void setIndexRange(long start, long end);
@@ -379,7 +388,7 @@ This means the index represents the **exposure attempt stream after category/lev
 
 ---
 
-#### Reset
+#### [Reset](#configuration-methods)
 
 ```java
 public static void reset();
@@ -389,7 +398,7 @@ public static void reset();
 
 ---
 
-#### Diagnostic Styling
+#### [Diagnostic Styling](#configuration-methods)
 
 ```java
 public static void setErrorStyle(String color, String prefix);
@@ -449,7 +458,7 @@ public static boolean isExposed(
 }
 ```
 
-#### Single-Level / Cascading Mode
+#### [Single-Level / Cascading Mode](#dual-mode-evaluation-logic)
 
 ```java
 Expresso.setLevel(ExposureLevel.LEVEL3);
@@ -469,7 +478,7 @@ The active level defines the **maximum exposure depth**.
 
 ---
 
-#### Multi-Level / Explicit Mode
+#### [Multi-Level / Explicit Mode](#dual-mode-evaluation-logic)
 
 ```java
 Expresso.setLevels(
@@ -494,6 +503,8 @@ This allows non-contiguous exposure selection.
 
 ### [Time Sources & Runtime Timing](#sections)
 
+>
+
 Expresso separates three concepts of time.
 
 ```text
@@ -512,7 +523,7 @@ Time
         └── System.nanoTime()
 ```
 
-#### Application Time
+#### [Application Time](#time-sources--runtime-timing)
 
 Applications can provide their own concept of time:
 
@@ -550,7 +561,7 @@ This allows Expresso to integrate with systems whose internal notion of time is 
 
 ---
 
-#### Absolute Timestamp
+#### [Absolute Timestamp](#time-sources--runtime-timing)
 
 ```java
 Expresso.enableTimestamp(true);
@@ -572,7 +583,7 @@ This provides a human-readable real-world date and time.
 
 ---
 
-#### Expresso Runtime Elapsed Time
+#### [Expresso Runtime Elapsed Time](#time-sources--runtime-timing)
 
 ```java
 Expresso.enableElapsedTime(true);
@@ -598,27 +609,58 @@ relative to Expresso's runtime start reference.
 
 ```java
 public static void setBridge(Consumer<String> outsideSystem);
+public static void setBridges(Consumer<String>... bridges);
+public static void addBridge(Consumer<String> bridge);
+public static boolean removeBridge(Consumer<String> bridge);
+public static void clearBridges();
 ```
 
-The bridge allows Expresso output to be routed into an external system.
+The bridge allows Expresso output to be routed into one or more external systems.
 
-The bridge accepts a Java `Consumer<String>`:
+A bridge accepts a Java `Consumer<String>` receiving the **already constructed output string**:
 
 ```java
 Consumer<String> outsideSystem = text -> System.out.print(text);
+
+Expresso.setBridge(outsideSystem);
 ```
 
-or:
+Or use a lambda:
 
 ```java
-Expresso.setBridge(
-    text -> System.out.print("[BRIDGE]: " + text)
+Expresso.setBridge(text -> System.out.print("[BRIDGE]: " + text));
+```
+
+#### [Multiple Bridges](#bridges--pipelines)
+
+Expresso supports routing the same output to multiple destinations simultaneously:
+
+```java
+Expresso.setBridges(
+    terminalBridge,
+    uiBridge,
+    fileBridge
 );
 ```
+
+Each registered bridge receives the same formatted output string.
+
+**Bridge management methods:**
+
+```java
+Expresso.setBridge(bridge);                // Replace all bridges with one
+Expresso.setBridges(bridgeA, bridgeB);     // Replace all bridges with several
+Expresso.addBridge(bridge);                // Add a destination
+Expresso.removeBridge(bridge);             // Remove a destination
+Expresso.clearBridges();                   // Remove all destinations
+```
+
+When no bridges are registered, Expresso falls back to `System.out`.
 
 Possible destinations include:
 
 ```text
+Terminal
 File
 UI
 Game Console
@@ -627,9 +669,9 @@ Custom Logger
 Database
 ```
 
-The bridge receives the already constructed raw output string.
+The bridge receives the formatted output after Expresso has applied its exposure filtering, index-range checks, metadata, and message formatting.
 
-#### Routing Pipeline
+#### [Routing Pipeline](#bridges--pipelines)
 
 ```text
 [Exposure.printf() Invoked]
@@ -656,24 +698,33 @@ The bridge receives the already constructed raw output string.
                         Format Message
                                │
                                ▼
-                    Is externalBridge active?
+                       Are Bridges Active?
                                │
                          ┌─────┴─────┐
                         Yes          No
                          │           │
                          ▼           ▼
-                  Consumer<String> System.out
+                  Dispatch to All   System.out
+                  Registered Bridges
+                         │
+                         ▼
+                    [Complete]
 ```
 
-This creates a separation between:
-
-> **Exposure generation → Output destination**
+Expresso determines what information is exposed. The developer determines where that information is delivered and which destinations are active.
 
 ---
 
 ### [Formatting & Diagnostic Actions](#sections)
 
-#### Structured Exposure
+> * [Structured Exposure](#structured-exposure)
+> * [Structured Formatting](#structural-formatting)
+> * [Error Reporting](#error-reporting)
+> * [Execution Markers](#execution-markers)
+
+---
+
+#### [Structured Exposure](#formatting--diagnostic-actions)
 
 ```java
 public static void printf(
@@ -696,7 +747,7 @@ An identity can be supplied directly, although most application code can use the
 
 ---
 
-#### Structural Formatting
+#### [Structural Formatting](#formatting--diagnostic-actions)
 
 ```java
 public static void NEWLINE(
@@ -720,7 +771,7 @@ public static void LINEBREAK(
 
 ---
 
-#### Unrestricted Error Reporting
+#### [Unrestricted Error Reporting](#formatting--diagnostic-actions)
 
 ```java
 public static void error(
@@ -755,7 +806,7 @@ java.lang.ArithmeticException: / by zero
 
 ---
 
-#### Execution Markers
+#### [Execution Markers](#formatting--diagnostic-actions)
 
 ```java
 public static void hereAnnounce();
@@ -797,7 +848,7 @@ The identity is automatically attached to emitted exposure events.
 
 This allows an application component to maintain its own exposure context without repeatedly supplying its identity to the underlying `Expresso` API.
 
-#### Shorthand Levels
+#### [Shorthand Levels](#exposure-depth)
 
 ```java
 exposure.l1(category, "...");
@@ -815,7 +866,7 @@ Each shorthand method represents a specific `ExposureLevel`.
 
 ---
 
-#### Generic Exposure
+#### [Generic Exposure](#exposure-depth)
 
 ```java
 exposure.expose(category, level, "...");
@@ -836,7 +887,7 @@ This allows expensive diagnostic calculations to remain lazy when their exposure
 
 ---
 
-#### Execution Helpers
+#### [Execution Helpers](#exposure-depth)
 
 ```java
 exposure.enabled(category, level);
@@ -860,7 +911,7 @@ These helpers provide component-local access to common Expresso operations while
 
 ### [Core API Integration](#sections)
 
-#### Example
+#### [Example](#core-api-integration)
 
 ```java
 import shared.javaUtil.Expresso;
@@ -943,7 +994,7 @@ Because Explicit Mode is active, only `LEVEL1` and `LEVEL5` exposures are emitte
 
 The `LEVEL3` exposure is intentionally suppressed.
 
-#### Example Output
+#### [Example Output](#core-api-integration)
 
 ```text
 [BRIDGE PIPELINE LOG]: [2026-09-01 23:53:42.381] [#1] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY

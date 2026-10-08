@@ -2,7 +2,7 @@
 
 [⬅️ Return to Hub](https://github.com/JaehoChoi00/Expresso/blob/main/README.md)
 
-[:arrow_left: Return to Understanding Expresso](/java/src/main/java/shared/javaUtil/Expresso.java)
+[:arrow_left: Return to Understanding Expresso](/java/README.md)
 
 > What type of coffee bean, and what level of roast?
 
@@ -627,7 +627,7 @@ The complete model can therefore be thought of as:
 
 ```txt
                             EXPOSURE LEVEL
-                  L1       L2       L3       L4       L5
+                   L1       L2       L3       L4       L5
                ┌────────┬────────┬────────┬────────┬────────┐
  VANILLA       │        │        │        │        │        │
                ├────────┼────────┼────────┼────────┼────────┤
@@ -643,8 +643,6 @@ The complete model can therefore be thought of as:
                ├────────┼────────┼────────┼────────┼────────┤
  DYNAMIC       │        │        │        │        │        │
                └────────┴────────┴────────┴────────┴────────┘
-
-
                                      │
                                      ▼
                         isExposed(category, level)
@@ -669,3 +667,5 @@ The filtering system then determines which coordinates are currently visible.
 This gives Expresso its fundamental abstraction:
 
 > **Category determines the horizontal domain. Level determines the vertical depth. Together they define the exposure coordinate.**
+
+[:arrow_up: Return to Top](#exposure-matrix-filter)

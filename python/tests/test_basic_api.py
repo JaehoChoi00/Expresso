@@ -462,6 +462,94 @@ class TestBasicApi(unittest.TestCase):
         self.assertRegex(captured[0], r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\]")
         self.assertRegex(captured[0], r"\[\+\d+\.\d{3}ms\]")
 
+    def test_multiple_bridges(self):
+        output_a = []
+        output_b = []
+        output_c = []
+
+        def bridge_a(text):
+            output_a.append(text)
+
+        def bridge_b(text):
+            output_b.append(text)
+
+        def bridge_c(text):
+            output_c.append(text)
+
+        exposure = Expresso.exposure("BridgeTest")
+
+        Expresso.setBridges(bridge_a, bridge_b)
+        exposure.l1(ExposureCategory.DEBUG, "Broadcast test")
+
+        self.assertTrue(output_a)
+        self.assertEqual(output_a, output_b)
+        self.assertEqual(output_c, [])
+
+        output_a.clear()
+        output_b.clear()
+
+        Expresso.addBridge(bridge_c)
+        exposure.l1(ExposureCategory.DEBUG, "Add test")
+
+        self.assertTrue(output_a)
+        self.assertTrue(output_b)
+        self.assertTrue(output_c)
+
+        output_a.clear()
+        output_b.clear()
+        output_c.clear()
+
+        self.assertTrue(Expresso.removeBridge(bridge_b))
+        exposure.l1(ExposureCategory.DEBUG, "Remove test")
+
+        self.assertTrue(output_a)
+        self.assertEqual(output_b, [])
+        self.assertTrue(output_c)
+
+        self.assertFalse(Expresso.removeBridge(bridge_b))
+
+        Expresso.clearBridges()
+
+        self.assertFalse(Expresso.removeBridge(bridge_a))
+        self.assertFalse(Expresso.removeBridge(bridge_c))
+
+        output_a.clear()
+        output_b.clear()
+        output_c.clear()
+
+        Expresso.setBridges(bridge_b, bridge_c)
+        Expresso.setBridge(bridge_a)
+        exposure.l1(ExposureCategory.DEBUG, "Replacement test")
+
+        self.assertTrue(output_a)
+        self.assertEqual(output_b, [])
+        self.assertEqual(output_c, [])
+
+    def test_bridge_failure_isolation(self):
+        output_a = []
+        output_b = []
+
+        def failing_bridge(text):
+            raise RuntimeError("Intentional bridge failure")
+
+        def bridge_a(text):
+            output_a.append(text)
+
+        def bridge_b(text):
+            output_b.append(text)
+
+        exposure = Expresso.exposure("BridgeFailureTest")
+
+        Expresso.setBridges(failing_bridge, bridge_a, bridge_b)
+
+        try:
+            exposure.l1(ExposureCategory.DEBUG, "Failure isolation test")
+        finally:
+            Expresso.clearBridges()
+
+        self.assertTrue(output_a, "Bridge A should receive output after a failure")
+        self.assertTrue(output_b, "Bridge B should receive output after a failure")
+        self.assertEqual(output_a, output_b)
 
 if __name__ == "__main__":
     unittest.main()

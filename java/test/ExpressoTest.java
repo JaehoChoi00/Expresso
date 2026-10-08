@@ -33,6 +33,7 @@ public class ExpressoTest {
         testDynamicCategory();
         testGenericExposure();
         testLazySupplier();
+        testBridges();
         testNewline();
         testLinebreak();
         testError();
@@ -248,6 +249,108 @@ public class ExpressoTest {
 
         check("Lazy Supplier evaluates when exposed", executed[0]);
     }
+
+    private static void testBridges() {
+        reset();
+        test.l1(ExposureCategory.TEST, Expresso.BOLD + "\nTesting Multiple Bridges" + Expresso.RESET);
+        test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        reset();
+
+        StringBuilder outputA = new StringBuilder();
+        StringBuilder outputB = new StringBuilder();
+        StringBuilder outputC = new StringBuilder();
+
+        java.util.function.Consumer<String> bridgeA = outputA::append;
+        java.util.function.Consumer<String> bridgeB = outputB::append;
+        java.util.function.Consumer<String> bridgeC = outputC::append;
+
+        // Test setBridges()
+        Expresso.setBridges(bridgeA, bridgeB);
+        test.l1(ExposureCategory.TEST, "Multi-bridge test\n");
+
+        boolean setBridgesBroadcast = outputA.length() > 0
+                && outputA.toString().equals(outputB.toString());
+        boolean setBridgesExcludesUnregistered = outputC.length() == 0;
+
+        // Test addBridge()
+        outputA.setLength(0);
+        outputB.setLength(0);
+
+        Expresso.addBridge(bridgeC);
+        test.l1(ExposureCategory.TEST, "Added bridge test\n");
+
+        boolean addBridgePreservesExisting = outputA.length() > 0 && outputB.length() > 0;
+        boolean addBridgeReceivesOutput = outputC.length() > 0;
+
+        // Test removeBridge()
+        outputA.setLength(0);
+        outputB.setLength(0);
+        outputC.setLength(0);
+
+        boolean removed = Expresso.removeBridge(bridgeB);
+        test.l1(ExposureCategory.TEST, "Removed bridge test\n");
+
+        boolean removeBridgeStopsOutput = outputB.length() == 0;
+        boolean removeBridgePreservesOthers = outputA.length() > 0 && outputC.length() > 0;
+
+        // Test clearBridges()
+        Expresso.clearBridges();
+
+        boolean clearBridgesRemovesAll = !Expresso.removeBridge(bridgeA) && !Expresso.removeBridge(bridgeC);
+
+        // Test setBridge()
+        outputA.setLength(0);
+        outputB.setLength(0);
+        outputC.setLength(0);
+
+        Expresso.setBridge(bridgeA);
+        test.l1(ExposureCategory.TEST, "Single bridge test\n");
+
+        boolean setBridgeReplacesBridges = outputA.length() > 0 && outputB.length() == 0 && outputC.length() == 0;
+
+        // Restore normal output before reporting assertions.
+        Expresso.clearBridges();
+
+        // Test bridge failure isolation
+        outputA.setLength(0);
+        outputB.setLength(0);
+        outputC.setLength(0);
+
+        java.util.function.Consumer<String> failingBridge = message -> { throw new RuntimeException("Intentional bridge failure"); };
+
+        Expresso.setBridges(failingBridge, bridgeA, bridgeB);
+
+        boolean dispatchSurvivedFailure;
+
+        try {
+            test.l1(ExposureCategory.TEST, "Bridge failure isolation test\n");
+            dispatchSurvivedFailure = true;
+        } catch (RuntimeException exception) {
+            dispatchSurvivedFailure = false;
+        }
+
+        boolean bridgeAReceivedOutput = outputA.length() > 0;
+        boolean bridgeBReceivedOutput = outputB.length() > 0;
+
+        Expresso.clearBridges();
+
+        check("bridge failure does not abort dispatch", dispatchSurvivedFailure);
+        check("bridge A receives output after bridge failure", bridgeAReceivedOutput);
+        check("bridge B receives output after bridge failure", bridgeBReceivedOutput);
+        check("setBridges sends output to every bridge", setBridgesBroadcast);
+        check("setBridges excludes unregistered bridges", setBridgesExcludesUnregistered);
+        check("addBridge preserves existing bridges", addBridgePreservesExisting);
+        check("addBridge sends output to the new bridge", addBridgeReceivesOutput);
+        check("removeBridge returns true for a registered bridge", removed);
+        check("removeBridge stops output to the removed bridge", removeBridgeStopsOutput);
+        check("removeBridge preserves other bridges", removeBridgePreservesOthers);
+        check("clearBridges removes all bridges", clearBridgesRemovesAll);
+        check("setBridge replaces bridges with one bridge", setBridgeReplacesBridges);
+
+        reset();
+    }
+
+
 
     private static void testNewline() {
         reset();

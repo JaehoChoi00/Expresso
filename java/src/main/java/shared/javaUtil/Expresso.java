@@ -10,6 +10,7 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import shared.javaUtil.enums.*;
 
@@ -58,7 +59,7 @@ public final class Expresso {
     private static final Set<ExposureLevel> enabledLevels = Collections.synchronizedSet(EnumSet.of(ExposureLevel.LEVEL1)); 
 
     // The bridge hook to route text to outside systems like UI or Files
-    private static volatile Consumer<String> externalBridge = null;
+    private static final CopyOnWriteArrayList<Consumer<String>> externalBridges = new CopyOnWriteArrayList<>();
 
     private static final long RUNTIME_START = System.nanoTime();
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
@@ -396,8 +397,49 @@ public final class Expresso {
      * 
      * @param outsideSystem A consumer (e.g. file writer, GUI panel) that will receive output strings.
      */
-    public static void setBridge(Consumer<String> outsideSystem) { externalBridge = outsideSystem; }
+    public static void setBridge(Consumer<String> outsideSystem) {
+        externalBridges.clear();
+        if (outsideSystem != null) externalBridges.add(outsideSystem);
+    }
 
+    /**
+     * Sets multiple external bridges, replacing all currently registered bridges.
+     * Each non-null bridge receives the same formatted output string.
+     * Duplicate bridges are ignored.
+     *
+     * @param bridges The consumers that will receive output strings.
+     */
+    @SafeVarargs
+    public static void setBridges(Consumer<String>... bridges) {
+        externalBridges.clear();
+        if (bridges != null) {
+            for (Consumer<String> bridge : bridges) {
+                if (bridge != null) externalBridges.addIfAbsent(bridge);
+            }
+        }
+    }
+
+    /**
+     * Adds an external bridge without replacing existing bridges.
+     * Duplicate bridges and {@code null} values are ignored.
+     *
+     * @param bridge The consumer to add as an output destination.
+     */
+    public static void addBridge(Consumer<String> bridge) { if (bridge != null) externalBridges.addIfAbsent(bridge); }
+
+    /**
+     * Removes a registered external bridge.
+     *
+     * @param bridge The consumer to remove.
+     * @return {@code true} if the bridge was removed; {@code false} otherwise.
+     */
+    public static boolean removeBridge(Consumer<String> bridge) { return externalBridges.remove(bridge); }
+
+    /**
+     * Removes all registered external bridges.
+     * Subsequent output falls back to the default standard output.
+     */
+    public static void clearBridges() { externalBridges.clear(); }
     
     /**
      * Resets Expresso to its default runtime exposure state.
@@ -513,11 +555,17 @@ public final class Expresso {
      * @param text The exact text block to emit.
      */
     private static void emit(String text) {
-        Consumer<String> bridge = externalBridge;
-        if (bridge != null) {
-            bridge.accept(text);
-        } else {
+        if (externalBridges.isEmpty()) {
             System.out.print(text);
+            return;
+        }
+
+        for (Consumer<String> bridge : externalBridges) {
+            try {
+                bridge.accept(text);
+            } catch (RuntimeException exception) {
+                System.err.println(FG_RED + "[Expresso] Bridge failed: " + exception + RESET);
+            }
         }
     }
 

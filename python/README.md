@@ -1,6 +1,8 @@
 # Python Implementation
 
-[Return to Hub](https://github.com/JaehoChoi00/Expresso/blob/main/README.md)
+[Return to Hub](https://github.com/JaehoChoi00/Expresso/blob/main/README.md)  
+
+[PyPI Webpage](https://pypi.org/project/expresso-framework/)
 
 ## Code
 
@@ -23,6 +25,7 @@
 > * [`Formatting & Diagnostic Actions`](#formatting--diagnostic-actions)
 > * [`Exposure Depth`](#exposure-depth)
 > * [`Core API Integration`](#core-api-integration)
+> * [`Design Philosophy`](#design-philosophy)
 
 ---
 
@@ -178,8 +181,9 @@ python -m unittest discover -s tests -v
 ***Result:***
 
 ```txt
+...
 ----------------------------------------------------------------------
-Ran 31 tests
+Ran 33 tests
 
 OK
 ```
@@ -480,7 +484,7 @@ def isExposed(category, requiredLevel):
     return True
 ```
 
-#### Single-Level / Cascading Mode
+#### [Single-Level / Cascading Mode](#dual-mode-evaluation-logic)
 
 ```py
 Expresso.setLevel(ExposureLevel.LEVEL3)
@@ -500,7 +504,7 @@ The active level defines the **maximum exposure depth**.
 
 ---
 
-#### Multi-Level / Explicit Mode
+#### [Multi-Level / Explicit Mode](#dual-mode-evaluation-logic)
 
 ```py
 Expresso.setLevels(ExposureLevel.LEVEL1, ExposureLevel.LEVEL5)
@@ -636,21 +640,47 @@ Expresso.setBridge(outsideSystem)
 
 The bridge allows Expresso output to be routed into an external system.
 
-The bridge accepts a callable:
+A bridge accepts a callable receiving the **already constructed output string**:
 
 ```py
-def outsideSystem(text): print(text)
+def outsideSystem(text):
+    print(text)
+
+Expresso.setBridge(outsideSystem)
 ```
 
-or:
+Or use a lambda:
 
 ```py
 Expresso.setBridge(lambda text: print("[BRIDGE]: " + text))
 ```
 
+#### [Multiple Bridges](#bridges--pipelines)
+
+Expresso supports routing the same output to multiple destinations simultaneously.
+
+```py
+Expresso.setBridges(terminalBridge, uiBridge, fileBridge)
+```
+
+Each registered bridge receives the same formatted output string.
+
+**Available bridge management methods:**
+
+```py
+Expresso.setBridge(bridge)             # Replace all bridges with one
+Expresso.setBridges(bridgeA, bridgeB)  # Replace all bridges with several
+Expresso.addBridge(bridge)             # Add a destination
+Expresso.removeBridge(bridge)          # Remove a destination
+Expresso.clearBridges()                # Remove all destinations
+```
+
+When no bridges are registered, Expresso falls back to its default `print()` output.
+
 Possible destinations include:
 
 ```txt
+Terminal
 File
 UI
 Game Console
@@ -659,13 +689,12 @@ Custom Logger
 Database
 ```
 
-The bridge receives the **already constructed output string**.
+Bridges determine **where output is delivered**, not which exposures qualify for output. Category filtering, level filtering, index ranges, metadata, and message formatting remain part of the existing exposure pipeline.
 
-#### Routing Pipeline
+#### [Routing Pipeline](#bridges--pipelines)
 
 ```txt
 [Exposure.printf() Invoked]
-
              │
              ▼
     Is Category & Level Exposed?
@@ -689,22 +718,29 @@ The bridge receives the **already constructed output string**.
                         Format Message
                                │
                                ▼
-                    Is externalBridge active?
+                       Are Bridges Active?
                                │
                          ┌─────┴─────┐
                         Yes          No
                          │           │
                          ▼           ▼
-                    Callable      print()
+                  Dispatch to All  print()
+                  Registered Bridges
+                         │
+                         ▼
+                    [Complete]
 ```
 
-This creates a separation between:
-
-> **Exposure generation** → **Output destination**
+Expresso determines what information is exposed. The developer determines where that information is delivered and which destinations are active.
 
 ---
 
 ### [`Formatting & Diagnostic Actions`](#sections)
+
+> * [Structured Exposure](#structured-exposure)
+> * [Structured Formatting](#structural-formatting)
+> * [Error Reporting](#error-reporting)
+> * [Execution Markers](#execution-markers)
 
 #### [Structured Exposure](#formatting--diagnostic-actions)
 
@@ -782,7 +818,7 @@ exposure = Expresso.exposure("Renderer")
 
 The identity is automatically attached to emitted exposure events.
 
-#### Shorthand Levels
+#### [Shorthand Levels](#exposure-depth)
 
 ```py
 exposure.l1(category, "...")
@@ -798,7 +834,7 @@ exposure.l5(category, "...")
 
 ---
 
-#### Generic Exposure
+#### [Generic Exposure](#exposure-depth)
 
 ```py
 exposure.expose(category, level, "...")
@@ -816,7 +852,7 @@ exposure.l3(ExposureCategory.DEBUG, lambda: expensiveDiagnosticCalculation())
 
 ---
 
-#### Execution Helpers
+#### [Execution Helpers](#exposure-depth)
 
 ```py
 exposure.nl(category, level)
@@ -836,7 +872,7 @@ exposure.here("Custom label")
 
 ### [`Core API Integration`](#sections)
 
-#### Example
+#### [Example](#core-api-integration)
 
 ```py
 from expresso import Expresso, ExposureCategory, ExposureLevel
@@ -871,7 +907,7 @@ except Exception as exception:
     exposure.err("Execution failed during register calculation [%s]:\n", "DIV_ZERO", exception)
 ```
 
-#### Example Output
+#### [Example Output](#core-api-integration)
 
 ```txt
 [BRIDGE PIPELINE LOG]: [2026-09-11 15:26:24.250] [#1] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY
@@ -893,7 +929,7 @@ ZeroDivisionError: division by zero
 
 ---
 
-## Design Philosophy
+## [Design Philosophy](#sections)
 
 Expresso is divided into separate responsibilities:
 

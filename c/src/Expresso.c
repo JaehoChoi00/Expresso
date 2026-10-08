@@ -16,6 +16,7 @@
 #define MAX_ENABLED_CATEGORIES 255
 #define MAX_ENABLED_LEVELS 5
 #define EXPOSURE_BUFFER_SIZE 4096
+#define MAX_BRIDGES 32
 
 #define END_CATEGORY ((ExposureCategory){NONE, NULL})
 #define END_LEVEL ((ExposureLevel)0)
@@ -43,7 +44,8 @@ static size_t enabledLevelCount = 1;
 
 static ExposureTimeSource timeSource = NULL;
 
-static void (*externalBridge)(const char *) = NULL;
+static void (*externalBridges[MAX_BRIDGES])(const char *);
+static size_t externalBridgeCount = 0;
 
 static char errorColor[128] = BOLD FG_RED;
 static char errorPrefix[128] = "[ERROR]: ";
@@ -477,7 +479,7 @@ void reset(void) {
     showDiagnosticTags = false;
 
     timeSource = NULL;
-    externalBridge = NULL;
+    externalBridgeCount = 0;
 
     pthread_mutex_unlock(&stateMutex);
 
@@ -491,7 +493,75 @@ void reset(void) {
  */
 void setBridge(void (*outsideSystem)(const char *)) {
     pthread_mutex_lock(&stateMutex);
-    externalBridge = outsideSystem;
+    externalBridgeCount = 0;
+    if (outsideSystem != NULL) externalBridges[externalBridgeCount++] = outsideSystem;
+    pthread_mutex_unlock(&stateMutex);
+}
+
+void setBridges(void (**bridges)(const char *), size_t count) {
+    pthread_mutex_lock(&stateMutex);
+    externalBridgeCount = 0;
+
+    if (bridges != NULL) {
+        for (size_t i = 0; i < count && externalBridgeCount < MAX_BRIDGES; i++) {
+            if (bridges[i] == NULL) continue;
+
+            bool exists = false;
+            for (size_t j = 0; j < externalBridgeCount; j++) {
+                if (externalBridges[j] == bridges[i]) {
+                    exists = true;
+                    break;
+                }
+            }
+
+            if (!exists) externalBridges[externalBridgeCount++] = bridges[i];
+        }
+    }
+
+    pthread_mutex_unlock(&stateMutex);
+}
+
+void addBridge(void (*bridge)(const char *)) {
+    if (bridge == NULL) return;
+
+    pthread_mutex_lock(&stateMutex);
+
+    for (size_t i = 0; i < externalBridgeCount; i++) {
+        if (externalBridges[i] == bridge) {
+            pthread_mutex_unlock(&stateMutex);
+            return;
+        }
+    }
+
+    if (externalBridgeCount < MAX_BRIDGES) {
+        externalBridges[externalBridgeCount++] = bridge;
+    }
+
+    pthread_mutex_unlock(&stateMutex);
+}
+
+bool removeBridge(void (*bridge)(const char *)) {
+    pthread_mutex_lock(&stateMutex);
+
+    for (size_t i = 0; i < externalBridgeCount; i++) {
+        if (externalBridges[i] == bridge) {
+            for (size_t j = i; j + 1 < externalBridgeCount; j++) {
+                externalBridges[j] = externalBridges[j + 1];
+            }
+
+            externalBridgeCount--;
+            pthread_mutex_unlock(&stateMutex);
+            return true;
+        }
+    }
+
+    pthread_mutex_unlock(&stateMutex);
+    return false;
+}
+
+void clearBridges(void) {
+    pthread_mutex_lock(&stateMutex);
+    externalBridgeCount = 0;
     pthread_mutex_unlock(&stateMutex);
 }
 
@@ -688,19 +758,28 @@ void expressoPrintf(const char *identity, ExposureCategory category, ExposureLev
  * @param text The text to emit.
  */
 void emit(const char *text) {
-    if (text == NULL) {
+    if (text == NULL) return;
+
+    void (*bridges[MAX_BRIDGES])(const char *);
+    size_t bridgeCount;
+
+    pthread_mutex_lock(&stateMutex);
+    bridgeCount = externalBridgeCount;
+
+    for (size_t i = 0; i < bridgeCount; i++) {
+        bridges[i] = externalBridges[i];
+    }
+
+    pthread_mutex_unlock(&stateMutex);
+
+    if (bridgeCount == 0) {
+        fputs(text, stdout);
+        fflush(stdout);
         return;
     }
 
-    pthread_mutex_lock(&stateMutex);
-    void (*bridge)(const char *) = externalBridge;
-    pthread_mutex_unlock(&stateMutex);
-
-    if (bridge != NULL) {
-        bridge(text);
-    } else {
-        fputs(text, stdout);
-        fflush(stdout);
+    for (size_t i = 0; i < bridgeCount; i++) {
+        bridges[i](text);
     }
 }
 

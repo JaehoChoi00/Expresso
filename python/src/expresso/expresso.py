@@ -50,7 +50,8 @@ class Expresso:
     enabledLevels = { ExposureLevel.LEVEL1 }
     levelsLock = Lock()
 
-    externalBridge = None
+    externalBridges = []
+    bridgeLock = Lock()
 
     runtimeStart = time.perf_counter()
 
@@ -226,7 +227,37 @@ class Expresso:
     def enableApplicationTime(enable): Expresso.showApplicationTimeTag = enable
 
     @staticmethod
-    def setBridge(outsideSystem): Expresso.externalBridge = outsideSystem
+    def setBridge(outsideSystem):
+        with Expresso.bridgeLock:
+            Expresso.externalBridges.clear()
+            if outsideSystem is not None:
+                Expresso.externalBridges.append(outsideSystem)
+
+    @staticmethod
+    def setBridges(*bridges):
+        with Expresso.bridgeLock:
+            Expresso.externalBridges = list(dict.fromkeys(bridge for bridge in bridges if bridge is not None))
+
+    @staticmethod
+    def addBridge(bridge):
+        if bridge is None:
+            return
+        with Expresso.bridgeLock:
+            if bridge not in Expresso.externalBridges:
+                Expresso.externalBridges.append(bridge)
+
+    @staticmethod
+    def removeBridge(bridge):
+        with Expresso.bridgeLock:
+            if bridge in Expresso.externalBridges:
+                Expresso.externalBridges.remove(bridge)
+                return True
+            return False
+
+    @staticmethod
+    def clearBridges():
+        with Expresso.bridgeLock:
+            Expresso.externalBridges.clear()
 
     @staticmethod
     def reset():
@@ -328,11 +359,18 @@ class Expresso:
 
     @staticmethod
     def emit(text):
-        bridge = Expresso.externalBridge
-        if bridge is not None:
-            bridge(text)
-        else:
+        with Expresso.bridgeLock:
+            bridges = tuple(Expresso.externalBridges)
+
+        if not bridges:
             print(text, end="")
+            return
+
+        for bridge in bridges:
+            try:
+                bridge(text)
+            except Exception as exception:
+                print(f"{Expresso.FG_RED}[Expresso] Bridge failed: {exception}{Expresso.RESET}", file=sys.stderr)
 
     @staticmethod
     def appendDiagnosticTags():

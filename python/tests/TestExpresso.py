@@ -65,6 +65,73 @@ exposure.l1(ExposureCategory.SYSTEMLOG, "Engine started\n")
 exposure.l2(ExposureCategory.COMPONENTIAL, "Loading component: %s\n", "Renderer")
 exposure.l3(ExposureCategory.LOWERLEVEL, "Internal value: %d\n", 42)
 
+print("\nMULTIPLE BRIDGES: ")
+
+bridgeOutputA = []
+bridgeOutputB = []
+bridgeOutputC = []
+
+def bridgeA(text): bridgeOutputA.append(text)
+
+def bridgeB(text): bridgeOutputB.append(text)
+
+def bridgeC(text): bridgeOutputC.append(text)
+
+def failingBridge(text): raise RuntimeError("Intentional bridge failure")
+
+Expresso.setBridges(bridgeA, bridgeB)
+exposure.l1(ExposureCategory.DEBUG, "Multiple bridge test\n")
+
+print("setBridges broadcasts:", bool(bridgeOutputA) and bridgeOutputA == bridgeOutputB)
+print("Unregistered bridge excluded:", not bridgeOutputC)
+
+bridgeOutputA.clear()
+bridgeOutputB.clear()
+
+Expresso.addBridge(bridgeC)
+exposure.l1(ExposureCategory.DEBUG, "Added bridge test\n")
+
+print("addBridge preserves existing bridges:", bool(bridgeOutputA) and bool(bridgeOutputB))
+print("addBridge receives output:", bool(bridgeOutputC))
+
+bridgeOutputA.clear()
+bridgeOutputB.clear()
+bridgeOutputC.clear()
+
+removed = Expresso.removeBridge(bridgeB)
+exposure.l1(ExposureCategory.DEBUG, "Removed bridge test\n")
+
+print("removeBridge succeeds:", removed)
+print("Removed bridge receives no output:", not bridgeOutputB)
+print("Other bridges still receive output:", bool(bridgeOutputA) and bool(bridgeOutputC))
+
+bridgeOutputA.clear()
+bridgeOutputC.clear()
+
+Expresso.setBridges(failingBridge, bridgeA, bridgeC)
+exposure.l1(ExposureCategory.DEBUG, "Failure isolation test\n")
+
+print("Bridge A receives output after failure:", bool(bridgeOutputA))
+print("Bridge C receives output after failure:", bool(bridgeOutputC))
+
+Expresso.clearBridges()
+
+print("clearBridges removes all bridges:",
+        not Expresso.removeBridge(failingBridge)
+        and not Expresso.removeBridge(bridgeA)
+        and not Expresso.removeBridge(bridgeC))
+
+bridgeOutputA.clear()
+bridgeOutputB.clear()
+bridgeOutputC.clear()
+
+Expresso.setBridge(bridgeA)
+exposure.l1(ExposureCategory.DEBUG, "Single bridge test\n")
+
+print("setBridge replaces bridges:", bool(bridgeOutputA) and not bridgeOutputB and not bridgeOutputC)
+
+Expresso.clearBridges()
+
 
 print("\nGENERIC EXPOSURE: ")
 

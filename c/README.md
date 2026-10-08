@@ -803,18 +803,19 @@ Example:
 ```
 
 ---
-
 ### [Bridges & Pipelines](#sections)
 
 ```c
 void setBridge(void (*outsideSystem)(const char *));
+void setBridges(void (**bridges)(const char *), size_t count);
+void addBridge(void (*bridge)(const char *));
+bool removeBridge(void (*bridge)(const char *));
+void clearBridges(void);
 ```
 
-The bridge allows Expresso output to be routed into an external system.
+The bridge allows Expresso output to be routed into one or more external systems.
 
-The bridge receives the already constructed output string.
-
-For example:
+A bridge receives the **already constructed output string** through a function pointer:
 
 ```c
 void bridge(const char *text) {
@@ -824,9 +825,40 @@ void bridge(const char *text) {
 setBridge(bridge);
 ```
 
+#### [Multiple Bridges](#bridges--pipelines)
+
+Expresso supports routing the same output to multiple destinations simultaneously.
+
+```c
+void (*bridges[])(const char *) = {
+    terminalBridge,
+    uiBridge,
+    fileBridge
+};
+
+setBridges(bridges, 3);
+```
+
+Each registered bridge receives the same formatted output string.
+
+**Bridge management methods:**
+
+```c
+setBridge(bridge);                // Replace all bridges with one
+setBridges(bridges, count);       // Replace all bridges with several
+addBridge(bridge);                // Add a destination
+removeBridge(bridge);             // Remove a destination
+clearBridges();                   // Remove all destinations
+```
+
+The C implementation supports up to 16 registered bridges. Adding a bridge beyond that capacity does not increase the capacity.
+
+When no bridges are registered, Expresso falls back to `stdout`.
+
 Possible destinations include:
 
 ```text
+Terminal
 File
 UI
 Game Console
@@ -835,9 +867,7 @@ Custom Logger
 Database
 ```
 
-The bridge does not need to understand Expresso's filtering logic.
-
-It receives the resulting output after Expresso has constructed it.
+The bridge does not need to understand Expresso's filtering logic. It receives the resulting output after Expresso has applied its exposure filtering, index-range checks, metadata, and message formatting.
 
 #### [Routing Pipeline](#bridges--pipelines)
 
@@ -866,23 +896,20 @@ Is Category & Level Exposed?
                 Format Message
                       │
                       ▼
-              Is externalBridge
-                 active?
+              Are Bridges Active?
+                      │
                 ┌─────┴─────┐
                Yes          No
-                │            │
-                ▼            ▼
-          External      stdout
-           Function
+                │           │
+                ▼           ▼
+        Dispatch to All   stdout
+        Registered Bridges
+                │
+                ▼
+            [Complete]
 ```
 
-This creates a separation between:
-
-> Exposure generation → Output destination
-
-Expresso determines what becomes visible.
-
-The consuming application determines what happens to the resulting output.
+Expresso determines what information becomes visible. The consuming application determines where that output is delivered and what happens to it.
 
 ---
 
@@ -990,7 +1017,7 @@ A lazy error callback allows the error message to be generated only when it is a
 
 The callback returns the final diagnostic string.
 
-#### Execution Markers
+#### [Execution Markers](#formatting--diagnostic-actions)
 
 ```c
 void here(Exposure *exposure);
