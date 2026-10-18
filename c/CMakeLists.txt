@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Expresso
-    VERSION 0.0.1
+    VERSION 0.0.4
     LANGUAGES C
 )
 

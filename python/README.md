@@ -91,6 +91,8 @@ Exposure
     ├── Category
     ├── Level
     ├── Time
+    ├── Process ID (PID)
+    ├── Thread ID (TID)
     ├── Error Styling
     ├── HERE Styling
     └── ANSI Formatting
@@ -183,7 +185,7 @@ python -m unittest discover -s tests -v
 ```txt
 ...
 ----------------------------------------------------------------------
-Ran 33 tests
+Ran 41 tests
 
 OK
 ```
@@ -325,6 +327,7 @@ Fetches an ANSI indexed 256-color foreground or background escape sequence.
 > * [Category Filtering](#category-filtering)
 > * [Tag Visibility](#tag-visibility)
 > * [Event Index Filtering](#event-index-filtering)
+> * [Thread ID Filtering](#thread-id-filtering)
 > * [Reset](#reset)
 > * [Diagnostic Styling](#diagnostic-styling)
 
@@ -385,6 +388,10 @@ Expresso.enableTimestamp(enable)
 Expresso.enableElapsedTime(enable)
 
 Expresso.enableApplicationTime(enable)
+
+Expresso.enablePIDTag(enable)
+
+Expresso.enableTIDTag(enable)
 ```
 
 > [!NOTE]
@@ -417,6 +424,29 @@ Expresso.getCurrentEventCount()
 
 ---
 
+#### [Thread ID Filtering](#configuration-methods)
+
+```py
+Expresso.setTIDFilter(*threadIDs)
+
+Expresso.clearTIDFilter()
+```
+
+`setTIDFilter()` restricts exposure events to the specified native thread IDs (TIDs).
+* `Expresso.setTIDFilter(1234)` allows events from thread 1234.
+* `Expresso.setTIDFilter(1234, 5678)` allows events from either thread.
+* `Expresso.setTIDFilter()` creates an empty allowlist, preventing events from every thread from being emitted.
+* `Expresso.clearTIDFilter()` removes the filter, allowing events from any thread that passes the other active filters.
+
+> [!NOTE]
+> Thread ID filtering and TID tag visibility are independent.  
+> `setTIDFilter()` controls which events can be emitted.  
+> `enableTIDTag()` controls whether the TID appears in the output.
+>
+> Thread ID filtering is disabled by default. When no TID filter is active, events from any thread may be emitted if they pass the other active filters.
+
+---
+
 #### [Reset](#configuration-methods)
 
 ```py
@@ -424,7 +454,10 @@ def reset():
     Expresso.clearAllCategories()
     Expresso.setLevel(ExposureLevel.LEVEL1)
     Expresso.clearIndexFilter()
+    Expresso.clearTIDFilter()
     Expresso.resetEventCounter()
+    Expresso.enablePIDTag(False)
+    Expresso.enableTIDTag(False)
     Expresso.enableTimestamp(False)
     Expresso.enableElapsedTime(False)
     Expresso.enableApplicationTime(False)
@@ -699,36 +732,42 @@ Bridges determine **where output is delivered**, not which exposures qualify for
              ▼
     Is Category & Level Exposed?
              │
-       ┌─────┴─────┐
+       ┌─────┴──────┐
       No           Yes
        │            │
        ▼            ▼
-   [Abort]    Increment Event Index
-                       │
-                       ▼
-                Check Index Range
-                       │
-                ┌──────┴──────┐
-             Outside        Inside
-                │              │
-                ▼              ▼
-             [Abort]    Append Metadata
-                               │
-                               ▼
-                        Format Message
-                               │
-                               ▼
-                       Are Bridges Active?
-                               │
-                         ┌─────┴─────┐
-                        Yes          No
-                         │           │
-                         ▼           ▼
-                  Dispatch to All  print()
-                  Registered Bridges
-                         │
-                         ▼
-                    [Complete]
+    [Abort]   Does TID Pass Filter?
+                    │
+              ┌─────┴─────┐
+             No          Yes
+              │           │
+              ▼           ▼
+           [Abort]  Increment Event Index
+                          │
+                          ▼
+                   Check Index Range
+                          │
+                   ┌──────┴──────┐
+                Outside        Inside
+                   │              │
+                   ▼              ▼
+                [Abort]    Append Metadata
+                                  │
+                                  ▼
+                           Format Message
+                                  │
+                                  ▼
+                          Are Bridges Active?
+                                  │
+                            ┌─────┴─────┐
+                           Yes          No
+                            │           │
+                            ▼           ▼
+                     Dispatch to All  print()
+                     Registered Bridges
+                            │
+                            ▼
+                       [Complete]
 ```
 
 Expresso determines what information is exposed. The developer determines where that information is delivered and which destinations are active.
@@ -874,22 +913,39 @@ exposure.here("Custom label")
 
 #### [Example](#core-api-integration)
 
-```py
+```python
 from expresso import Expresso, ExposureCategory, ExposureLevel
 
 exposure = Expresso.exposure("ALU")
 
-Expresso.setCategories(ExposureCategory.COMPONENTIAL, ExposureCategory.LOWERLEVEL)
+Expresso.setCategories(
+    ExposureCategory.COMPONENTIAL,
+    ExposureCategory.LOWERLEVEL
+)
 
-Expresso.setLevels(ExposureLevel.LEVEL1, ExposureLevel.LEVEL5)
+Expresso.setLevels(
+    ExposureLevel.LEVEL1,
+    ExposureLevel.LEVEL5
+)
+
+Expresso.enableIndexTag(True)
+Expresso.enableIdentityTag(True)
+Expresso.enableCategoryTag(True)
+Expresso.enableLevelTag(True)
+
+Expresso.enablePIDTag(True)
+Expresso.enableTIDTag(True)
 
 Expresso.enableTimestamp(True)
-
+Expresso.enableElapsedTime(True)
 Expresso.enableApplicationTime(False)
 
 Expresso.setBridge(lambda rawText: print("[BRIDGE PIPELINE LOG]: " + rawText))
 
-exposure.l1(ExposureCategory.COMPONENTIAL, Expresso.BOLD + "ALU Unit Initialized -> " + Expresso.RESET + Expresso.FG_GREEN + "READY" + Expresso.RESET + "\n")
+exposure.l1(
+    ExposureCategory.COMPONENTIAL, Expresso.BOLD + "ALU Unit Initialized -> " + Expresso.RESET + 
+    Expresso.FG_GREEN + "READY" + Expresso.RESET + "\n"
+)
 
 exposure.l3(ExposureCategory.COMPONENTIAL, "Intermediate Bus Clock: 400MHz\n")
 
@@ -898,21 +954,26 @@ exposure.l5(ExposureCategory.LOWERLEVEL, "NAND Gate Transistor Logic Validated.\
 exposure.lbr(ExposureCategory.COMPONENTIAL, ExposureLevel.LEVEL1)
 
 exposure.here()
-
 exposure.here("This is the label.")
 
 try:
     invalidOperation = 1 / 0
 except Exception as exception:
     exposure.err("Execution failed during register calculation [%s]:\n", "DIV_ZERO", exception)
+
+Expresso.clearTIDFilter()
+Expresso.clearIndexFilter()
+Expresso.clearBridges()
+
+Expresso.reset()
 ```
 
 #### [Example Output](#core-api-integration)
 
 ```txt
-[BRIDGE PIPELINE LOG]: [2026-09-11 15:26:24.250] [#1] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY
+BRIDGE PIPELINE LOG]: [2026-10-14 10:51:39.746] [+0.630ms] [#1] [PID:87007] [TID:407376690] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY
 
-[BRIDGE PIPELINE LOG]: [2026-09-11 15:26:24.250] [#2] [ALU] [LOWERLEVEL] [LEVEL5] NAND Gate Transistor Logic Validated.
+[BRIDGE PIPELINE LOG]: [2026-10-14 10:51:39.746] [+0.707ms] [#2] [PID:87007] [TID:407376690] [ALU] [LOWERLEVEL] [LEVEL5] NAND Gate Transistor Logic Validated.
 
 [BRIDGE PIPELINE LOG]: 
 --------------------------------
@@ -923,7 +984,10 @@ except Exception as exception:
 
 [BRIDGE PIPELINE LOG]: [ERROR]: [ALU] Execution failed during register calculation [DIV_ZERO]:
 
-Traceback...
+Traceback (most recent call last):
+  File "Expresso/python/Example.py", line 44, in <module>
+    invalidOperation = 1 / 0
+                       ~~^~~
 ZeroDivisionError: division by zero
 ```
 
@@ -954,8 +1018,10 @@ Expresso is divided into separate responsibilities:
     │                                                       │
     │  Category ──┐                                         │
     │  Level ─────┤                                         │
-    │  Index ─────┤──> Exposure Evaluation ──> Formatting   │
-    │  Identity ──┤                                         │
+    │  Index ─────┤                                         │
+    │  Identity ──┤──> Exposure Evaluation ──> Formatting   │
+    │  PID ───────┤                                         │
+    │  TID ───────┤                                         │
     │  Time ──────┘                                         │
     │                                                       │
     └──────────────────────────┬────────────────────────────┘

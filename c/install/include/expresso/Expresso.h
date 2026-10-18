@@ -3,13 +3,13 @@
 #define EXPRESSO_H
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #include "ExposureCategory.h"
 #include "ExposureLevel.h"
 #include "ExposureTimeSource.h"
 #include "VariableConstants.h"
-
-#define MAX_ENABLED_CATEGORIES 255
 
 void expressoNewline(ExposureCategory category, ExposureLevel requiredLevel);
 void expressoLinebreak(ExposureCategory category, ExposureLevel requiredLevel);
@@ -22,6 +22,12 @@ void enableTimestamp(bool enable);
 void enableElapsedTime(bool enable);
 void enableApplicationTime(bool enable);
 void enableDiagnosticTags(bool enable);
+
+void enablePIDTag(bool enable);
+void enableTIDTag(bool enable);
+
+void setTIDFilter(const uint64_t *tids, size_t count);
+void clearTIDFilter(void);
 
 void setIndexRange(long long start, long long end);
 void setIndexRangeMax(long long end);
@@ -50,6 +56,10 @@ void setTimeSource(ExposureTimeSource source);
 void reset(void);
 
 void setBridge(void (*outsideSystem)(const char *));
+void setBridges(void (**bridges)(const char *), size_t count);
+void addBridge(void (*bridge)(const char *));
+bool removeBridge(void (*bridge)(const char *));
+void clearBridges(void);
 
 bool isExposed(ExposureCategory category, ExposureLevel requiredLevel);
 

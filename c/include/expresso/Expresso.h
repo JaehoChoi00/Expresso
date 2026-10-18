@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "ExposureCategory.h"
 #include "ExposureLevel.h"
@@ -21,6 +22,12 @@ void enableTimestamp(bool enable);
 void enableElapsedTime(bool enable);
 void enableApplicationTime(bool enable);
 void enableDiagnosticTags(bool enable);
+
+void enablePIDTag(bool enable);
+void enableTIDTag(bool enable);
+
+void setTIDFilter(const uint64_t *tids, size_t count);
+void clearTIDFilter(void);
 
 void setIndexRange(long long start, long long end);
 void setIndexRangeMax(long long end);

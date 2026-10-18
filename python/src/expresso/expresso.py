@@ -3,7 +3,8 @@ import time
 import traceback
 from datetime import datetime
 from enum import Enum
-from threading import Lock
+import os
+from threading import Lock, get_native_id
 
 from .enums.exposure_category import ExposureCategory
 from .enums.exposure_level import ExposureLevel
@@ -24,6 +25,8 @@ class Expresso:
     showIdentityTag = True
     showCategoryTag = True
     showLevelTag = True
+    showPIDTag = False
+    showTIDTag = False
 
     timeSource = None
     showApplicationTimeTag = False
@@ -52,6 +55,9 @@ class Expresso:
 
     externalBridges = []
     bridgeLock = Lock()
+
+    tidFilter = None
+    tidFilterLock = Lock()
 
     runtimeStart = time.perf_counter()
 
@@ -109,6 +115,12 @@ class Expresso:
     def enableElapsedTime(enable): Expresso.showElapsedTimeTag = enable
 
     @staticmethod
+    def enablePIDTag(enable): Expresso.showPIDTag = enable
+
+    @staticmethod
+    def enableTIDTag(enable): Expresso.showTIDTag = enable
+
+    @staticmethod
     def setIndexRange(start, end = None):
         if end is None:
             nextMin = 0
@@ -123,6 +135,14 @@ class Expresso:
 
     @staticmethod
     def setSingleIndex(targetIndex): Expresso.setIndexRange(targetIndex, targetIndex)
+
+    @staticmethod
+    def setTIDFilter(*threadIDs):
+        with Expresso.tidFilterLock: Expresso.tidFilter = set(threadIDs)
+
+    @staticmethod
+    def clearTIDFilter():
+        with Expresso.tidFilterLock: Expresso.tidFilter = None
 
     @staticmethod
     def setErrorStyle(color = None, prefix = None):
@@ -264,7 +284,10 @@ class Expresso:
         Expresso.clearAllCategories()
         Expresso.setLevel(ExposureLevel.LEVEL1)
         Expresso.clearIndexFilter()
+        Expresso.clearTIDFilter()
         Expresso.resetEventCounter()
+        Expresso.enablePIDTag(False)
+        Expresso.enableTIDTag(False)
         Expresso.enableTimestamp(False)
         Expresso.enableElapsedTime(False)
         Expresso.enableApplicationTime(False)
@@ -311,6 +334,12 @@ class Expresso:
 
         if not Expresso.isExposed(category, requiredLevel): return
 
+        currentTID = get_native_id()
+
+        with Expresso.tidFilterLock: activeTIDFilter = Expresso.tidFilter
+
+        if activeTIDFilter is not None and currentTID not in activeTIDFilter: return
+
         with Expresso.counterLock:
             Expresso.globalEventCounter += 1
             currentIndex = Expresso.globalEventCounter
@@ -340,6 +369,12 @@ class Expresso:
 
         if Expresso.showIndexTag:
             output += Expresso.DIM + f"[#{currentIndex}] " + Expresso.RESET
+
+        if Expresso.showPIDTag:
+            output += Expresso.DIM + f"[PID:{os.getpid()}] " + Expresso.RESET
+
+        if Expresso.showTIDTag:
+            output += Expresso.DIM + f"[TID:{get_native_id()}] " + Expresso.RESET
 
         if Expresso.showIdentityTag and identity is not None and str(identity).strip():
             output += Expresso.DIM + f"[{identity}] " + Expresso.RESET
@@ -389,6 +424,12 @@ class Expresso:
         if Expresso.showElapsedTimeTag:
             elapsedMillis = (time.perf_counter() - Expresso.runtimeStart) * 1000.0
             output += Expresso.DIM + f"[+{elapsedMillis:.3f}ms] " + Expresso.RESET
+
+        if Expresso.showPIDTag:
+            output += Expresso.DIM + f"[PID:{os.getpid()}] " + Expresso.RESET
+
+        if Expresso.showTIDTag:
+            output += Expresso.DIM + f"[TID:{get_native_id()}] " + Expresso.RESET
 
         return output
 

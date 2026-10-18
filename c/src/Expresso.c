@@ -1,11 +1,30 @@
+#if defined(__linux__)
+    #define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdatomic.h>
-#include <pthread.h>
 #include <time.h>
 #include <limits.h>
+#include <stdint.h>
+#include <stddef.h>
+
+#if defined(__linux__)
+    #include <pthread.h>
+    #include <unistd.h>
+    #include <sys/syscall.h>
+#elif defined(__APPLE__)
+    #include <pthread.h>
+    #include <unistd.h>
+#elif defined(_WIN32)
+    #include <windows.h>
+#else
+    #error "Expresso does not support this platform."
+#endif
+
 
 #include "expresso/Expresso.h"
 #include "expresso/ExposureCategory.h"
@@ -17,6 +36,7 @@
 #define MAX_ENABLED_LEVELS 5
 #define EXPOSURE_BUFFER_SIZE 4096
 #define MAX_BRIDGES 32
+#define MAX_TID_FILTERS 256
 
 #define END_CATEGORY ((ExposureCategory){NONE, NULL})
 #define END_LEVEL ((ExposureLevel)0)
@@ -35,6 +55,13 @@ static bool showTimestampTag = false;
 static bool showElapsedTimeTag = false;
 static bool showApplicationTimeTag = false;
 static bool showDiagnosticTags = false;
+
+static bool showPIDTag = false;
+static bool showTIDTag = false;
+
+static uint64_t enabledTIDs[MAX_TID_FILTERS];
+static size_t enabledTIDCount = 0;
+static bool tidFilterActive = false;
 
 static ExposureCategory enabledCategories[MAX_ENABLED_CATEGORIES];
 static size_t enabledCategoryCount = 0;
@@ -58,7 +85,81 @@ static struct timespec runtimeStart;
 static pthread_once_t runtimeInitOnce = PTHREAD_ONCE_INIT;
 static pthread_mutex_t stateMutex = PTHREAD_MUTEX_INITIALIZER;
 
+static bool isCurrentThreadAllowed(void);
+
 static void initializeRuntime(void) { clock_gettime(CLOCK_MONOTONIC, &runtimeStart); }
+
+
+static bool getNativeThreadID(uint64_t *tid) {
+    if (tid == NULL) return false;
+
+    #if defined(__linux__)
+        long result = syscall(SYS_gettid);
+        if (result <= 0) return false;
+        *tid = (uint64_t)result;
+        return true;
+
+    #elif defined(__APPLE__)
+        uint64_t result = 0;
+        if (pthread_threadid_np(NULL, &result) != 0 || result == 0) return false;
+        *tid = result;
+        return true;
+
+    #elif defined(_WIN32)
+        DWORD result = GetCurrentThreadId();
+        if (result == 0) return false;
+        *tid = (uint64_t)result;
+        return true;
+
+    #else
+        #error "Native thread ID support is not implemented for this platform."
+    
+        #endif
+}
+
+
+
+static bool getNativeProcessID(uint64_t *pid) {
+    if (pid == NULL) return false;
+
+    #if defined(__linux__) || defined(__APPLE__)
+        pid_t result = getpid();
+        if (result <= 0) return false;
+        *pid = (uint64_t)result;
+        return true;
+
+    #elif defined(_WIN32)
+        DWORD result = GetCurrentProcessId();
+        if (result == 0) return false;
+        *pid = (uint64_t)result;
+        return true;
+
+    #else
+        #error "Native process ID support is not implemented for this platform."
+    #endif
+}
+
+#include <stdio.h>
+#include <stdarg.h>
+
+static bool appendFormat(char *buffer, size_t capacity, size_t *offset, const char *format, ...) {
+    if (buffer == NULL || offset == NULL || format == NULL || capacity == 0 || *offset >= capacity) return false;
+
+    va_list args;
+    va_start(args, format);
+    int written = vsnprintf(buffer + *offset, capacity - *offset, format, args);
+    va_end(args);
+
+    if (written < 0 || (size_t)written >= capacity - *offset) {
+        buffer[capacity - 1] = '\0';
+        *offset = capacity - 1;
+        return false;
+    }
+
+    *offset += (size_t)written;
+    return true;
+}
+
 
 static void ensureRuntimeInitialized(void) { pthread_once(&runtimeInitOnce, initializeRuntime); }
 
@@ -70,6 +171,7 @@ static void ensureRuntimeInitialized(void) { pthread_once(&runtimeInitOnce, init
  */
 void expressoNewline(ExposureCategory category, ExposureLevel requiredLevel) {
     if (!isExposed(category, requiredLevel)) return;
+    if (!isCurrentThreadAllowed()) return;
     emit("\n\n");
 }
 
@@ -81,6 +183,7 @@ void expressoNewline(ExposureCategory category, ExposureLevel requiredLevel) {
  */
 void expressoLinebreak(ExposureCategory category, ExposureLevel requiredLevel) {
     if (!isExposed(category, requiredLevel)) return;
+    if (!isCurrentThreadAllowed()) return;
     emit("\n--------------------------------\n");
 }
 
@@ -92,6 +195,28 @@ void expressoLinebreak(ExposureCategory category, ExposureLevel requiredLevel) {
 void enableIndexTag(bool enable) {
     pthread_mutex_lock(&stateMutex);
     showIndexTag = enable;
+    pthread_mutex_unlock(&stateMutex);
+}
+
+/**
+ * Toggles the display of the PID tag.
+ *
+ * @param enable Whether to display the PID tag.
+ */
+void enablePIDTag(bool enable) {
+    pthread_mutex_lock(&stateMutex);
+    showPIDTag = enable;
+    pthread_mutex_unlock(&stateMutex);
+}
+
+/**
+ * Toggles the display of the TID tag.
+ *
+ * @param enable Whether to display the TID tag.
+ */
+void enableTIDTag(bool enable) {
+    pthread_mutex_lock(&stateMutex);
+    showTIDTag = enable;
     pthread_mutex_unlock(&stateMutex);
 }
 
@@ -449,6 +574,78 @@ void setCategories(ExposureCategory category, ...) {
 }
 
 /**
+ * Restricts exposure output to the specified native thread IDs.
+ *
+ * The filter is active even when count is zero.
+ * If count exceeds MAX_TID_FILTERS, only the first
+ * MAX_TID_FILTERS entries are considered.
+ *
+ * @param tids Array of native thread IDs.
+ * @param count Number of entries in the array.
+ */
+void setTIDFilter(const uint64_t *tids, size_t count) {
+    pthread_mutex_lock(&stateMutex);
+
+    enabledTIDCount = 0;
+
+    if (tids != NULL) {
+        size_t limit = count < MAX_TID_FILTERS
+            ? count
+            : MAX_TID_FILTERS;
+
+        for (size_t i = 0; i < limit; i++) {
+            bool exists = false;
+
+            for (size_t j = 0; j < enabledTIDCount; j++) {
+                if (enabledTIDs[j] == tids[i]) {
+                    exists = true;
+                    break;
+                }
+            }
+
+            if (!exists) {
+                enabledTIDs[enabledTIDCount++] = tids[i];
+            }
+        }
+    }
+
+    tidFilterActive = true;
+
+    pthread_mutex_unlock(&stateMutex);
+}
+
+/**
+ * Disables the TID filter and allows all threads again.
+ */
+void clearTIDFilter(void) {
+    pthread_mutex_lock(&stateMutex);
+
+    enabledTIDCount = 0;
+    tidFilterActive = false;
+
+    pthread_mutex_unlock(&stateMutex);
+}
+
+/**
+ * Checks whether the current thread passes the active TID filter.
+ */
+static bool isTIDAllowed(uint64_t tid) {
+    bool allowed = true;
+    pthread_mutex_lock(&stateMutex);
+    if (tidFilterActive) {
+        allowed = false;
+        for (size_t i = 0; i < enabledTIDCount; i++) {
+            if (enabledTIDs[i] == tid) {
+                allowed = true;
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&stateMutex);
+    return allowed;
+}
+
+/**
  * Sets the application time source.
  *
  * @param source The application time source.
@@ -472,6 +669,17 @@ void reset(void) {
 
     minIndex = 0;
     maxIndex = LLONG_MAX;
+
+    showIndexTag = true;
+    showIdentityTag = true;
+    showCategoryTag = true;
+    showLevelTag = true;
+
+    showPIDTag = false;
+    showTIDTag = false;
+
+    enabledTIDCount = 0;
+    tidFilterActive = false;
 
     showTimestampTag = false;
     showElapsedTimeTag = false;
@@ -639,14 +847,15 @@ bool isExposed(ExposureCategory category, ExposureLevel requiredLevel) {
  * @param ... Arguments for the message format.
  */
 void expressoPrintf(const char *identity, ExposureCategory category, ExposureLevel requiredLevel, const char *format, ...) {
-    if (!isExposed(category, requiredLevel)) {
-        return;
-    }
+    if (!isExposed(category, requiredLevel)) return;
+
+    uint64_t currentTID;
+    if (!getNativeThreadID(&currentTID)) return;
+    if (!isTIDAllowed(currentTID)) return;
 
     long long currentIndex = atomic_fetch_add(&globalEventCounter, 1) + 1;
 
     pthread_mutex_lock(&stateMutex);
-
     long long currentMinIndex = minIndex;
     long long currentMaxIndex = maxIndex;
 
@@ -655,37 +864,35 @@ void expressoPrintf(const char *identity, ExposureCategory category, ExposureLev
     bool categoryTag = showCategoryTag;
     bool levelTag = showLevelTag;
 
-    pthread_mutex_unlock(&stateMutex);
-
-    if (currentIndex < currentMinIndex || currentIndex > currentMaxIndex) {
-        return;
-    }
-
-    ensureRuntimeInitialized();
-
-    char output[EXPOSURE_BUFFER_SIZE];
-    size_t offset = 0;
-
-    pthread_mutex_lock(&stateMutex);
+    bool pidTag = showPIDTag;
+    bool tidTag = showTIDTag;
 
     bool timestampTag = showTimestampTag;
     bool elapsedTimeTag = showElapsedTimeTag;
     bool applicationTimeTag = showApplicationTimeTag;
     ExposureTimeSource currentTimeSource = timeSource;
-
     pthread_mutex_unlock(&stateMutex);
 
-    bool hasMetadata = applicationTimeTag || timestampTag || elapsedTimeTag || indexTag || identityTag || categoryTag || levelTag;
+    if (currentIndex < currentMinIndex || currentIndex > currentMaxIndex) return;
 
-    if (hasMetadata) {
-        offset += snprintf(output + offset, sizeof(output) - offset, "%s", DIM);
+    ensureRuntimeInitialized();
+
+    char output[EXPOSURE_BUFFER_SIZE] = {0};
+    size_t offset = 0;
+    size_t capacity = sizeof(output);
+
+    bool hasMetadata = applicationTimeTag || timestampTag || elapsedTimeTag || indexTag || identityTag || categoryTag || levelTag || pidTag || tidTag;
+
+    if (hasMetadata && !appendFormat(output, capacity, &offset, "%s", DIM)) {
+        emit(output);
+        return;
     }
 
     if (applicationTimeTag && currentTimeSource != NULL) {
         const char *applicationTime = currentTimeSource();
-
-        if (applicationTime != NULL) {
-            offset += snprintf(output + offset, sizeof(output) - offset, "[%s] ", applicationTime);
+        if (applicationTime != NULL && !appendFormat(output, capacity, &offset, "[%s] ", applicationTime)) {
+            emit(output);
+            return;
         }
     }
 
@@ -693,62 +900,93 @@ void expressoPrintf(const char *identity, ExposureCategory category, ExposureLev
         struct timespec timestamp;
         struct tm localTime;
 
-        clock_gettime(CLOCK_REALTIME, &timestamp);
-        localtime_r(&timestamp.tv_sec, &localTime);
+        if (clock_gettime(CLOCK_REALTIME, &timestamp) == 0 && localtime_r(&timestamp.tv_sec, &localTime) != NULL) {
+            size_t written = strftime(output + offset, capacity - offset, "[%Y-%m-%d %H:%M:%S", &localTime);
+            if (written == 0 || written >= capacity - offset) {
+                output[capacity - 1] = '\0';
+                emit(output);
+                return;
+            }
 
-        offset += strftime(output + offset, sizeof(output) - offset, "[%Y-%m-%d %H:%M:%S", &localTime);
-        offset += snprintf(output + offset, sizeof(output) - offset, ".%03ld] ", timestamp.tv_nsec / 1000000);
+            offset += written;
+            if (!appendFormat(output, capacity, &offset, ".%03ld] ", timestamp.tv_nsec / 1000000L)) {
+                emit(output);
+                return;
+            }
+        }
     }
 
     if (elapsedTimeTag) {
         struct timespec currentTime;
-        clock_gettime(CLOCK_MONOTONIC, &currentTime);
 
-        long long seconds = currentTime.tv_sec - runtimeStart.tv_sec;
-        long long nanoseconds = currentTime.tv_nsec - runtimeStart.tv_nsec;
+        if (clock_gettime(CLOCK_MONOTONIC, &currentTime) == 0) {
+            long long seconds = (long long)currentTime.tv_sec - (long long)runtimeStart.tv_sec;
+            long long nanoseconds = (long long)currentTime.tv_nsec - (long long)runtimeStart.tv_nsec;
 
-        if (nanoseconds < 0) {
-            seconds--;
-            nanoseconds += 1000000000LL;
+            if (nanoseconds < 0) {
+                seconds--;
+                nanoseconds += 1000000000LL;
+            }
+
+            double elapsed = (double)seconds + ((double)nanoseconds / 1000000000.0);
+            if (!appendFormat(output, capacity, &offset, "[%.3fs] ", elapsed)) {
+                emit(output);
+                return;
+            }
         }
-
-        double elapsed = (double)seconds + ((double)nanoseconds / 1000000000.0);
-
-        offset += snprintf(output + offset, sizeof(output) - offset, "[%.3fs] ", elapsed);
     }
 
-    if (indexTag) {
-        offset += snprintf(output + offset, sizeof(output) - offset, "[#%lld] ", currentIndex);
+    if (indexTag && !appendFormat(output, capacity, &offset, "[#%lld] ", currentIndex)) {
+        emit(output);
+        return;
     }
 
-    if (identityTag && identity != NULL && identity[0] != '\0') {
-        offset += snprintf(output + offset, sizeof(output) - offset, "[%s] ", identity);
+    if (pidTag) {
+        uint64_t currentPID;
+        if (getNativeProcessID(&currentPID) && !appendFormat(output, capacity, &offset, "[PID:%llu] ", (unsigned long long)currentPID)) {
+            emit(output);
+            return;
+        }
     }
 
-    if (categoryTag && category.name != NULL) {
-        offset += snprintf(output + offset, sizeof(output) - offset, "[%s] ", category.name);
+    if (tidTag && !appendFormat(output, capacity, &offset, "[TID:%llu] ", (unsigned long long)currentTID)) {
+        emit(output);
+        return;
     }
 
-    if (levelTag) {
-        offset += snprintf(output + offset, sizeof(output) - offset, "[LEVEL%d] ", requiredLevel);
+    if (identityTag && identity != NULL && identity[0] != '\0' && !appendFormat(output, capacity, &offset, "[%s] ", identity)) {
+        emit(output);
+        return;
     }
 
-    if (hasMetadata) {
-        offset += snprintf(output + offset, sizeof(output) - offset, "%s", RESET);
+    if (categoryTag && category.name != NULL && !appendFormat(output, capacity, &offset, "[%s] ", category.name)) {
+        emit(output);
+        return;
     }
 
-    if (offset >= sizeof(output)) {
-        output[sizeof(output) - 1] = '\0';
+    if (levelTag && !appendFormat(output, capacity, &offset, "[LEVEL%d] ", requiredLevel)) {
+        emit(output);
+        return;
+    }
+
+    if (hasMetadata && !appendFormat(output, capacity, &offset, "%s", RESET)) {
+        emit(output);
+        return;
+    }
+
+    if (format == NULL) {
         emit(output);
         return;
     }
 
     va_list arguments;
-
     va_start(arguments, format);
-    vsnprintf(output + offset, sizeof(output) - offset, format, arguments);
+    int written = vsnprintf(output + offset, capacity - offset, format, arguments);
     va_end(arguments);
 
+    if (written < 0) return;
+
+    output[capacity - 1] = '\0';
     emit(output);
 }
 
@@ -961,4 +1199,10 @@ void hereAnnounceCustom(const char *identity, const char *customColor, const cha
     snprintf(output + offset, sizeof(output) - offset, "%s\n", RESET);
 
     emit(output);
+}
+
+static bool isCurrentThreadAllowed(void) {
+    uint64_t tid;
+    if (!getNativeThreadID(&tid))  return false;
+    return isTIDAllowed(tid);
 }

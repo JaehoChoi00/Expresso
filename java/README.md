@@ -88,6 +88,8 @@ Exposure
     ├── Category
     ├── Level
     ├── Time
+    ├── Process ID (PID)
+    ├── Thread ID (TID)
     ├── Error Styling
     ├── HERE Styling
     └── ANSI Formatting
@@ -179,6 +181,10 @@ The test suite verifies core Expresso behavior, including:
 * Index filtering
 * Dynamic categories
 * Reset behavior
+* Process ID (PID) tag
+* Thread ID (TID) tag
+* Thread ID filtering and filter clearing
+* PID/TID reset behavior
 
 ---
 
@@ -187,14 +193,14 @@ The test suite verifies core Expresso behavior, including:
 Create the distributable JAR:
 
 ```bash
-jar cf build/expresso-0.0.1.jar -C build/classes shared/javaUtil
+jar cf build/expresso-0.0.4.jar -C build/classes shared/javaUtil
 ```
 
 The resulting library is:
 
 ```text
 build/
-└── expresso-0.0.1.jar
+└── expresso-0.0.4.jar
 ```
 
 The JAR contains the compiled `shared.javaUtil` library and does not include the test program.
@@ -206,7 +212,7 @@ The JAR contains the compiled `shared.javaUtil` library and does not include the
 Inspect the packaged classes:
 
 ```bash
-jar tf build/expresso-0.0.1.jar
+jar tf build/expresso-0.0.4.jar
 ```
 
 The JAR should contain:
@@ -283,12 +289,13 @@ Fetches an ANSI indexed 256-color foreground or background escape sequence.
 
 ### [Configuration Methods](#sections)
 
-> [Level Filtering](#level-filtering)
-> [Category Filtering](#category-filtering)
-> [Tag Visibility](#tag-visibility)
-> [Event Index Filtering](#event-index-filtering)
-> [Reset](#reset)
-> [Diagnostic Styling](#diagnostic-styling)
+> * [Level Filtering](#level-filtering)
+> * [Category Filtering](#category-filtering)
+> * [Tag Visibility](#tag-visibility)
+> * [Event Index Filtering](#event-index-filtering)
+> * [Thread ID Filtering](#thread-id-filtering)
+> * [Reset](#reset)
+> * [Diagnostic Styling](#diagnostic-styling)
 
 ---
 
@@ -354,11 +361,19 @@ public static void enableTimestamp(boolean enable);
 public static void enableElapsedTime(boolean enable);
 
 public static void enableApplicationTime(boolean enable);
+
+public static void enablePIDTag(boolean enable);
+
+public static void enableTIDTag(boolean enable);
 ```
 
-Index, identity, category, and level tags are enabled by default.
-
-Timestamp, elapsed time, and application time are disabled by default.
+> [!INFO]
+> Index, identity, category, and level tags are enabled by default.
+> 
+> Timestamp, elapsed time, and application time are disabled by default.
+> 
+> PID and TID tags are disabled by default. Enable them independently with `enablePIDTag(true)` and `enableTIDTag(true)`. The PID tag identifies the current process; the TID tag identifies the current Java thread.
+> 
 
 ---
 
@@ -388,10 +403,53 @@ This means the index represents the **exposure attempt stream after category/lev
 
 ---
 
+#### [Thread ID Filtering](#configuration-methods)
+
+```java
+Expresso.setTIDFilter(1234L);
+
+Expresso.setTIDFilter(1234L, 5678L);
+
+Expresso.setTIDFilter();
+
+Expresso.clearTIDFilter();
+```
+
+`setTIDFilter()` restricts exposure events to the specified native thread IDs (TIDs).
+
+* `Expresso.setTIDFilter(1234L)` allows events from thread 1234.
+* `Expresso.setTIDFilter(1234L, 5678L)` allows events from either thread.
+* `Expresso.setTIDFilter()` creates an empty allowlist, preventing events from every thread from being emitted.
+* `Expresso.clearTIDFilter()` removes the filter, allowing events from any thread that passes the other active filters.
+
+> [!Note]
+>
+> Thread ID filtering and TID tag visibility are independent.
+>
+> `setTIDFilter()` controls which events can be emitted.
+>
+> `enableTIDTag()` controls whether the TID appears in the output.
+>
+> Thread ID filtering is disabled by default. When no TID filter is active, events from any thread may be emitted if they pass the other active filters.
+
+---
+
 #### [Reset](#configuration-methods)
 
 ```java
-public static void reset();
+public static void reset() {
+    clearAllCategories();
+    setLevel(ExposureLevel.LEVEL1);
+    clearIndexFilter();
+    enablePIDTag(false);
+    enableTIDTag(false);
+    clearTIDFilter();
+    resetEventCounter();
+    enableTimestamp(false);
+    enableElapsedTime(false);
+    enableApplicationTime(false);
+    setBridge(null);
+}
 ```
 
 `reset()` restores the core Expresso runtime state, including exposure filters, event indexing, timing configuration, and external bridge configuration.
@@ -679,36 +737,42 @@ The bridge receives the formatted output after Expresso has applied its exposure
              ▼
     Is Category & Level Exposed?
              │
-       ┌─────┴─────┐
+       ┌─────┴──────┐
       No           Yes
        │            │
        ▼            ▼
-   [Abort]    Increment Event Index
-                       │
-                       ▼
-                Check Index Range
-                       │
-                ┌──────┴──────┐
-             Outside        Inside
-                │              │
-                ▼              ▼
-             [Abort]    Append Metadata
-                               │
-                               ▼
-                        Format Message
-                               │
-                               ▼
-                       Are Bridges Active?
-                               │
-                         ┌─────┴─────┐
-                        Yes          No
-                         │           │
-                         ▼           ▼
-                  Dispatch to All   System.out
-                  Registered Bridges
-                         │
-                         ▼
-                    [Complete]
+    [Abort]   Does TID Pass Filter?
+                    │
+              ┌─────┴─────┐
+             No          Yes
+              │           │
+              ▼           ▼
+           [Abort]  Increment Event Index
+                          │
+                          ▼
+                   Check Index Range
+                          │
+                   ┌──────┴──────┐
+                Outside        Inside
+                   │              │
+                   ▼              ▼
+                [Abort]    Append Metadata
+                                  │
+                                  ▼
+                           Format Message
+                                  │
+                                  ▼
+                          Are Bridges Active?
+                                  │
+                            ┌─────┴─────┐
+                           Yes          No
+                            │           │
+                            ▼           ▼
+                     Dispatch to All  print()
+                     Registered Bridges
+                            │
+                            ▼
+                       [Complete]
 ```
 
 Expresso determines what information is exposed. The developer determines where that information is delivered and which destinations are active.
@@ -926,66 +990,63 @@ public class Example {
 
         Expresso.setCategories(
             ExposureCategory.COMPONENTIAL,
-            ExposureCategory.LOWERLEVEL
+            ExposureCategory.LOWERLEVEL,
+            ExposureCategory.DEBUG,
+            ExposureCategory.SYSTEMLOG
         );
 
         Expresso.setLevels(
             ExposureLevel.LEVEL1,
+            ExposureLevel.LEVEL3,
             ExposureLevel.LEVEL5
         );
 
+        Expresso.enableIndexTag(true);
+        Expresso.enableIdentityTag(true);
+        Expresso.enableCategoryTag(true);
+        Expresso.enableLevelTag(true);
+
+        Expresso.enablePIDTag(true);
+        Expresso.enableTIDTag(true);
+
         Expresso.enableTimestamp(true);
+        Expresso.enableElapsedTime(true);
         Expresso.enableApplicationTime(false);
 
         Expresso.setBridge(rawText -> {
+            String cleanText = rawText.replaceAll("\u001B\\[[;\\d]*m", "");
 
-            String cleanText =
-                rawText.replaceAll("\u001B\\[[;\\d]*m", "");
-
-            System.out.print(
-                "[BRIDGE PIPELINE LOG]: " + cleanText
-            );
+            System.out.print( "[BRIDGE PIPELINE LOG]: " + cleanText );
         });
 
         alu.l1(
-            ExposureCategory.COMPONENTIAL,
-            Expresso.BOLD
-                + "ALU Unit Initialized -> "
-                + Expresso.RESET
-                + Expresso.FG_GREEN
-                + "READY"
-                + Expresso.RESET
-                + "\n"
+            ExposureCategory.COMPONENTIAL, Expresso.BOLD
+            + "ALU Unit Initialized -> " + Expresso.RESET
+            + Expresso.FG_GREEN + "READY" + Expresso.RESET + "\n"
         );
 
-        alu.l3(
-            ExposureCategory.COMPONENTIAL,
-            "Intermediate Bus Clock: 400MHz\n"
-        );
+        alu.l3(ExposureCategory.COMPONENTIAL, "Intermediate Bus Clock: 400MHz\n");
 
-        alu.l5(
-            ExposureCategory.LOWERLEVEL,
-            "NAND Gate Transistor Logic Validated.\n"
-        );
+        alu.l5(ExposureCategory.LOWERLEVEL, "NAND Gate Transistor Logic Validated.\n");
 
-        alu.lbr(
-            ExposureCategory.COMPONENTIAL,
-            ExposureLevel.LEVEL1
-        );
+        alu.l3(ExposureCategory.DEBUG, () -> "Intermediate diagnostic calculation completed.\n");
+
+        alu.lbr(ExposureCategory.COMPONENTIAL, ExposureLevel.LEVEL1);
 
         alu.here();
-
-        alu.here("This is the label.");
+        alu.here("Reached ALU validation stage");
 
         try {
             int invalidOperation = 1 / 0;
         } catch (ArithmeticException e) {
-            alu.err(
-                "Execution failed during register calculation [%s]:\n",
-                "DIV_ZERO",
-                e
-            );
+            alu.err("Execution failed during register calculation [%s]:\n", "DIV_ZERO", e);
         }
+
+        Expresso.clearTIDFilter();
+        Expresso.clearIndexFilter();
+        Expresso.clearBridges();
+
+        Expresso.reset();
     }
 }
 ```
@@ -997,20 +1058,23 @@ The `LEVEL3` exposure is intentionally suppressed.
 #### [Example Output](#core-api-integration)
 
 ```text
-[BRIDGE PIPELINE LOG]: [2026-09-01 23:53:42.381] [#1] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY
-
-[BRIDGE PIPELINE LOG]: [2026-09-01 23:53:42.382] [#2] [ALU] [LOWERLEVEL] [LEVEL5] NAND Gate Transistor Logic Validated.
-
-[BRIDGE PIPELINE LOG]:
+[BRIDGE PIPELINE LOG]: [2026-10-14 10:45:15.528] [+96.733ms] [#1] [PID:82695] [TID:3] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY
+[BRIDGE PIPELINE LOG]: [2026-10-14 10:45:15.536] [+104.879ms] [#2] [PID:82695] [TID:3] [ALU] [COMPONENTIAL] [LEVEL3] Intermediate Bus Clock: 400MHz
+[BRIDGE PIPELINE LOG]: [2026-10-14 10:45:15.537] [+105.031ms] [#3] [PID:82695] [TID:3] [ALU] [LOWERLEVEL] [LEVEL5] NAND Gate Transistor Logic Validated.
+[BRIDGE PIPELINE LOG]: [2026-10-14 10:45:15.537] [+105.331ms] [#4] [PID:82695] [TID:3] [ALU] [DEBUG] [LEVEL3] Intermediate diagnostic calculation completed.
+[BRIDGE PIPELINE LOG]: 
 --------------------------------
-
-[BRIDGE PIPELINE LOG]: --> [EXPRESSO REPORT HERE]: [ALU]
-
-[BRIDGE PIPELINE LOG]: --> [EXPRESSO REPORT HERE]: [ALU] This is the label.
-
+[BRIDGE PIPELINE LOG]: [ALU] --> [EXPRESSO REPORT HERE]
+[BRIDGE PIPELINE LOG]: [ALU] --> [EXPRESSO REPORT HERE]: Reached ALU validation stage
 [BRIDGE PIPELINE LOG]: [ERROR]: [ALU] Execution failed during register calculation [DIV_ZERO]:
 
 java.lang.ArithmeticException: / by zero
+        at Example.main(Example.java:60)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+        at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+        at jdk.compiler/com.sun.tools.javac.launcher.SourceLauncher.execute(SourceLauncher.java:258)
+        at jdk.compiler/com.sun.tools.javac.launcher.SourceLauncher.run(SourceLauncher.java:138)
+        at jdk.compiler/com.sun.tools.javac.launcher.SourceLauncher.main(SourceLauncher.java:76)
 ```
 
 ---
@@ -1040,8 +1104,10 @@ Expresso is divided into separate responsibilities:
     │                                                       │
     │  Category ──┐                                         │
     │  Level ─────┤                                         │
-    │  Index ─────┤──> Exposure Evaluation ──> Formatting   │
-    │  Identity ──┤                                         │
+    │  Index ─────┤                                         │
+    │  Identity ──┤──> Exposure Evaluation ──> Formatting   │
+    │  PID ───────┤                                         │
+    │  TID ───────┤                                         │
     │  Time ──────┘                                         │
     │                                                       │
     └──────────────────────────┬────────────────────────────┘

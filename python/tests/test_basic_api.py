@@ -1,4 +1,6 @@
 import unittest
+import os
+from threading import Thread, get_native_id
 
 from expresso import Expresso, Exposure, ExposureCategory, ExposureLevel
 
@@ -8,11 +10,14 @@ class TestBasicApi(unittest.TestCase):
         Expresso.clearAllCategories()
         Expresso.setLevel(ExposureLevel.LEVEL1)
         Expresso.clearIndexFilter()
+        Expresso.clearTIDFilter()
         Expresso.resetEventCounter()
 
         Expresso.enableTimestamp(False)
         Expresso.enableElapsedTime(False)
         Expresso.enableApplicationTime(False)
+        Expresso.enablePIDTag(False)
+        Expresso.enableTIDTag(False)
 
         Expresso.setBridge(None)
 
@@ -20,8 +25,11 @@ class TestBasicApi(unittest.TestCase):
         Expresso.clearAllCategories()
         Expresso.setLevel(ExposureLevel.LEVEL1)
         Expresso.clearIndexFilter()
+        Expresso.clearTIDFilter()
         Expresso.resetEventCounter()
 
+        Expresso.enablePIDTag(False)
+        Expresso.enableTIDTag(False)
         Expresso.enableTimestamp(False)
         Expresso.enableElapsedTime(False)
         Expresso.enableApplicationTime(False)
@@ -550,6 +558,205 @@ class TestBasicApi(unittest.TestCase):
         self.assertTrue(output_a, "Bridge A should receive output after a failure")
         self.assertTrue(output_b, "Bridge B should receive output after a failure")
         self.assertEqual(output_a, output_b)
+
+        # PID / TID TAGS
+
+    def test_pid_and_tid_tags_are_disabled_by_default(self):
+        captured = self.capture()
+        exposure = Expresso.exposure("ProcessTest")
+
+        exposure.l1(ExposureCategory.SYSTEMLOG, "Default metadata")
+
+        self.assertEqual(len(captured), 1)
+        self.assertNotIn(f"[PID:{os.getpid()}]", captured[0])
+        self.assertNotIn(f"[TID:{get_native_id()}]", captured[0])
+
+    def test_pid_and_tid_tags(self):
+        captured = self.capture()
+        exposure = Expresso.exposure("ProcessTest")
+
+        Expresso.enablePIDTag(True)
+        Expresso.enableTIDTag(True)
+
+        exposure.l1(ExposureCategory.SYSTEMLOG, "Both tags enabled")
+
+        self.assertEqual(len(captured), 1)
+        self.assertIn(f"[PID:{os.getpid()}]", captured[0])
+        self.assertIn(f"[TID:{get_native_id()}]", captured[0])
+        self.assertIn("Both tags enabled", captured[0])
+
+    def test_pid_and_tid_tags_toggle_independently(self):
+        captured = self.capture()
+        exposure = Expresso.exposure("ProcessTest")
+
+        # PID only
+        Expresso.enablePIDTag(True)
+        Expresso.enableTIDTag(False)
+
+        exposure.l1(ExposureCategory.SYSTEMLOG, "PID only")
+
+        self.assertIn(f"[PID:{os.getpid()}]", captured[-1])
+        self.assertNotIn("[TID:", captured[-1])
+
+        # TID only
+        Expresso.enablePIDTag(False)
+        Expresso.enableTIDTag(True)
+
+        exposure.l1(ExposureCategory.SYSTEMLOG, "TID only")
+
+        self.assertNotIn("[PID:", captured[-1])
+        self.assertIn(f"[TID:{get_native_id()}]", captured[-1])
+
+        # Neither
+        Expresso.enablePIDTag(False)
+        Expresso.enableTIDTag(False)
+
+        exposure.l1(ExposureCategory.SYSTEMLOG, "Neither tag")
+
+        self.assertNotIn("[PID:", captured[-1])
+        self.assertNotIn("[TID:", captured[-1])
+
+        self.assertEqual(len(captured), 3)
+
+    def test_thread_id_is_captured_at_emission(self):
+        captured = self.capture()
+        exposure = Expresso.exposure("ThreadTest")
+        worker_ids = []
+
+        Expresso.enablePIDTag(True)
+        Expresso.enableTIDTag(True)
+
+        main_tid = get_native_id()
+
+        def worker():
+            worker_ids.append(get_native_id())
+            exposure.l1(
+                ExposureCategory.SYSTEMLOG,
+                "Worker thread event"
+            )
+
+        thread = Thread(target=worker)
+        thread.start()
+        thread.join()
+
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(len(worker_ids), 1)
+
+        worker_tid = worker_ids[0]
+
+        self.assertNotEqual(worker_tid, main_tid)
+        self.assertIn(f"[PID:{os.getpid()}]", captured[0])
+        self.assertIn(f"[TID:{worker_tid}]", captured[0])
+        self.assertIn("Worker thread event", captured[0])
+
+    def test_diagnostic_tags_include_pid_and_tid(self):
+        captured = self.capture()
+
+        Expresso.enablePIDTag(True)
+        Expresso.enableTIDTag(True)
+        Expresso.enableDiagnosticTags(True)
+
+        Expresso.error("Diagnostic process metadata")
+
+        self.assertEqual(len(captured), 1)
+        self.assertIn(f"[PID:{os.getpid()}]", captured[0])
+        self.assertIn(f"[TID:{get_native_id()}]", captured[0])
+        self.assertIn("Diagnostic process metadata", captured[0])
+
+        # TID FILTER
+
+    def test_tid_filter_allows_only_selected_thread(self):
+        captured = self.capture()
+        exposure = Expresso.exposure("TIDFilterTest")
+
+        main_tid = get_native_id()
+        worker_ids = []
+
+        Expresso.setTIDFilter(main_tid)
+
+        exposure.l1(
+            ExposureCategory.SYSTEMLOG,
+            "Main thread event"
+        )
+
+        def worker():
+            worker_ids.append(get_native_id())
+            exposure.l1(
+                ExposureCategory.SYSTEMLOG,
+                "Worker thread event"
+            )
+
+        thread = Thread(target=worker)
+        thread.start()
+        thread.join()
+
+        self.assertEqual(len(worker_ids), 1)
+        self.assertNotEqual(worker_ids[0], main_tid)
+
+        self.assertEqual(len(captured), 1)
+        self.assertIn("Main thread event", captured[0])
+        self.assertNotIn(
+            "Worker thread event",
+            "".join(captured)
+        )
+
+    def test_clear_tid_filter_allows_all_threads(self):
+        captured = self.capture()
+        exposure = Expresso.exposure("TIDFilterTest")
+
+        main_tid = get_native_id()
+        worker_ids = []
+
+        Expresso.setTIDFilter(main_tid)
+
+        def worker():
+            worker_ids.append(get_native_id())
+            exposure.l1(
+                ExposureCategory.SYSTEMLOG,
+                "Filtered worker event"
+            )
+
+        thread = Thread(target=worker)
+        thread.start()
+        thread.join()
+
+        self.assertEqual(captured, [])
+
+        Expresso.clearTIDFilter()
+
+        thread = Thread(target=worker)
+        thread.start()
+        thread.join()
+
+        self.assertEqual(len(worker_ids), 2)
+        self.assertNotEqual(worker_ids[0], main_tid)
+        self.assertNotEqual(worker_ids[1], main_tid)
+
+        self.assertEqual(len(captured), 1)
+        self.assertIn("Filtered worker event", captured[0])
+
+    def test_empty_tid_filter_rejects_all_threads(self):
+        captured = self.capture()
+        exposure = Expresso.exposure("TIDFilterTest")
+
+        Expresso.setTIDFilter()
+
+        exposure.l1(
+            ExposureCategory.SYSTEMLOG,
+            "Main thread event"
+        )
+
+        def worker():
+            exposure.l1(
+                ExposureCategory.SYSTEMLOG,
+                "Worker thread event"
+            )
+
+        thread = Thread(target=worker)
+        thread.start()
+        thread.join()
+
+        self.assertEqual(captured, [])
 
 if __name__ == "__main__":
     unittest.main()

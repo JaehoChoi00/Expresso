@@ -33,6 +33,8 @@ public final class Expresso {
     private static volatile boolean showIdentityTag = true;
     private static volatile boolean showCategoryTag = true;
     private static volatile boolean showLevelTag = true;
+    private static volatile boolean showPIDTag = false;
+    private static volatile boolean showTIDTag = false;
 
     private static volatile ExposureTimeSource timeSource = null;
     private static volatile boolean showApplicationTimeTag = false;
@@ -63,6 +65,8 @@ public final class Expresso {
 
     private static final long RUNTIME_START = System.nanoTime();
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+
+    private static volatile Set<Long> tidFilter = null;
 
     // Direct alias mappings from the absolute source of truth
     public static final String RESET = VariableConstants.RESET;
@@ -238,7 +242,7 @@ public final class Expresso {
         showDiagnosticTags = enable;
     }
 
-    /**
+    /** 
      * Clears any active index filters, allowing all events to be logged regardless of their index.
      */
     public static void clearIndexFilter() {
@@ -274,6 +278,16 @@ public final class Expresso {
     public static void disableCategory(ExposureCategory category) { 
         if (category != null) enabledCategories.remove(category.name()); 
     }
+
+    /**
+     * Toggles display of the current process ID.
+     */
+    public static void enablePIDTag(boolean enable) { showPIDTag = enable; }
+
+    /**
+     * Toggles display of the current thread ID.
+     */
+    public static void enableTIDTag(boolean enable) { showTIDTag = enable; }
 
     /**
      * Emits a double newline to the output if the specified category and level criteria are met.
@@ -350,6 +364,23 @@ public final class Expresso {
         }
         enabledCategories = nextSet;
     }
+
+    /**
+     * Restricts logging to the specified thread IDs.
+     * An empty argument list rejects events from every thread.
+     */
+    public static void setTIDFilter(long... threadIDs) {
+        Set<Long> nextFilter = ConcurrentHashMap.newKeySet();
+        if (threadIDs != null) {
+            for (long threadID : threadIDs) nextFilter.add(threadID);
+        }
+        tidFilter = nextFilter;
+    }
+
+    /**
+     * Removes the thread ID filter.
+     */
+    public static void clearTIDFilter() { tidFilter = null; }
 
     /**
      * Retrieves the total number of events that have been logged (or attempted) 
@@ -452,6 +483,10 @@ public final class Expresso {
         clearAllCategories();
         setLevel(ExposureLevel.LEVEL1);
         clearIndexFilter();
+        enablePIDTag(false);
+        enableTIDTag(false);
+        showDiagnosticTags = false;
+        clearTIDFilter();
         resetEventCounter();
         enableTimestamp(false);
         enableElapsedTime(false);
@@ -515,7 +550,11 @@ public final class Expresso {
     public static void printf(String identity, ExposureCategory category, ExposureLevel requiredLevel, String format, Object... args) {
         if (!isExposed(category, requiredLevel)) return;
 
+        Set<Long> activeTIDFilter = tidFilter;
+        long currentTID = Thread.currentThread().threadId();
+        if (activeTIDFilter != null && !activeTIDFilter.contains(currentTID)) return;
         long currentIndex = globalEventCounter.incrementAndGet();
+
         if (currentIndex < minIndex || currentIndex > maxIndex) return;
 
         StringBuilder stringBuilder = new StringBuilder(128);
@@ -540,6 +579,8 @@ public final class Expresso {
         }
 
         if (showIndexTag) { stringBuilder.append(DIM).append("[#").append(currentIndex).append("] ").append(RESET); }
+        if (showPIDTag) { stringBuilder.append(DIM).append("[PID:").append(ProcessHandle.current().pid()).append("] ").append(RESET); }
+        if (showTIDTag) { stringBuilder.append(DIM).append("[TID:").append(currentTID).append("] ").append(RESET); }
         if (showIdentityTag && identity != null && !identity.isBlank()) { stringBuilder.append(DIM).append("[").append(identity).append("] ").append(RESET); }
         if (showCategoryTag) { stringBuilder.append(DIM).append("[").append(category.name()).append("] ").append(RESET); }
         if (showLevelTag) { stringBuilder.append(DIM).append("[").append(requiredLevel).append("] ").append(RESET); }
@@ -584,13 +625,16 @@ public final class Expresso {
                 stringBuilder.append(DIM).append("[").append(appTime).append("] ").append(RESET);
             }
         }
-        if (showTimestampTag) {
-            stringBuilder.append(DIM).append("[").append(LocalDateTime.now().format(TIMESTAMP_FORMAT)).append("] ").append(RESET);
-        }
+
+        if (showTimestampTag) { stringBuilder.append(DIM).append("[").append(LocalDateTime.now().format(TIMESTAMP_FORMAT)).append("] ").append(RESET); }
+        
         if (showElapsedTimeTag) {
             double elapsedMillis = (System.nanoTime() - RUNTIME_START) / 1000000.0;
             stringBuilder.append(String.format(DIM + "[+%.3fms] " + RESET, elapsedMillis));
         }
+        if (showPIDTag) { stringBuilder.append(DIM).append("[PID:").append(ProcessHandle.current().pid()).append("] ").append(RESET); }
+
+        if (showTIDTag) { stringBuilder.append(DIM).append("[TID:").append(Thread.currentThread().threadId()).append("] ").append(RESET); }
     }
 
     /**

@@ -2,6 +2,7 @@ import shared.javaUtil.Expresso;
 import shared.javaUtil.Exposure;
 import shared.javaUtil.enums.ExposureCategory;
 import shared.javaUtil.enums.ExposureLevel;
+import java.lang.management.ManagementFactory;
 
 public class ExpressoTest {
 
@@ -16,7 +17,7 @@ public class ExpressoTest {
         Expresso.enableLevelTag(false);
         Expresso.enableIdentityTag(true);
         Expresso.enableTimestamp(true);
-
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         test.l1(ExposureCategory.TEST,  Expresso.BOLD + "EXPRESSO TEST SUITE START" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         
@@ -44,9 +45,13 @@ public class ExpressoTest {
         testTimestampAndElapsedTime();
         testEventCounter();
         testIndexFilter();
+        testPIDTag();
+        testTIDTag();
+        testTIDFilter();
+        testPIDTIDReset();
         testResetState();
 
-        test.here("\nTesting complete");
+        test.here("Testing complete");
 
         test.l1(ExposureCategory.TEST,  Expresso.BOLD + "PASSED: " + passed + Expresso.RESET + "\n");
         test.l1(ExposureCategory.TEST,  Expresso.BOLD + "FAILED: " + failed + Expresso.RESET + "\n");
@@ -84,7 +89,8 @@ public class ExpressoTest {
 
     private static void testClassesExist() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting if Classes Exist" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing if Classes Exist" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -94,7 +100,8 @@ public class ExpressoTest {
 
     private static void testExposureCreation() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Exposure Creation With & Without Identity" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Exposure Creation With & Without Identity" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
         
@@ -111,7 +118,8 @@ public class ExpressoTest {
 
     private static void testDefaultLevel() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting the Default Level of Expresso" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing the Default Level of Expresso" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -121,7 +129,8 @@ public class ExpressoTest {
 
     private static void testCumulativeLevelFiltering() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Level Filtering" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Level Filtering" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -137,7 +146,8 @@ public class ExpressoTest {
 
     private static void testExplicitSelectedLevels() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Hand-Picked Level Filtering" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Hand-Picked Level Filtering" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -152,7 +162,8 @@ public class ExpressoTest {
 
     private static void testCategoryFilter() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Category Filtering" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Category Filtering" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -164,7 +175,8 @@ public class ExpressoTest {
 
     private static void testMultipleCategories() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Multiple Category Filtering" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Multiple Category Filtering" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -177,7 +189,8 @@ public class ExpressoTest {
 
     private static void testClearCategoryFilter() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Category Filter Clearing" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Category Filter Clearing" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -190,7 +203,8 @@ public class ExpressoTest {
 
     private static void testDynamicCategory() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Dynamic Category Creation" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Dynamic Category Creation" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -206,7 +220,8 @@ public class ExpressoTest {
 
     private static void testGenericExposure() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Generic Exposure Syntax" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Generic Exposure Syntax" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -219,7 +234,8 @@ public class ExpressoTest {
 
     private static void testLazySupplier() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Lazy Supplier" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Lazy Supplier" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -252,7 +268,8 @@ public class ExpressoTest {
 
     private static void testBridges() {
         reset();
-        test.l1(ExposureCategory.TEST, Expresso.BOLD + "\nTesting Multiple Bridges" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST, Expresso.BOLD + "Testing Multiple Bridges" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -354,7 +371,8 @@ public class ExpressoTest {
 
     private static void testNewline() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting NewLine Utility Function" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing NewLine Utility Function" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -365,7 +383,8 @@ public class ExpressoTest {
 
     private static void testLinebreak() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting LineBreak Utility Function" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing LineBreak Utility Function" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -374,7 +393,8 @@ public class ExpressoTest {
 
     private static void testError() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Error Utility" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Error Utility" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -385,7 +405,8 @@ public class ExpressoTest {
 
     private static void testErrorWithException() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Error Utility with Exception" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Error Utility with Exception" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -398,7 +419,8 @@ public class ExpressoTest {
 
     private static void testHere() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Here Utility" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Here Utility" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -409,8 +431,8 @@ public class ExpressoTest {
 
     private static void testHereWithLabel() {
         reset();
-
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Here Utility with Label" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Here Utility with Label" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -420,7 +442,8 @@ public class ExpressoTest {
 
     private static void testCustomHereStyle() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Customizability of Here" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Customizability of Here" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -433,7 +456,8 @@ public class ExpressoTest {
 
     private static void testTimestampAndElapsedTime() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Timestamp and Elapsed Time Tags" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Timestamp and Elapsed Time Tags" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -447,7 +471,8 @@ public class ExpressoTest {
 
     private static void testEventCounter() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Event Counter" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Event Counter" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -464,7 +489,8 @@ public class ExpressoTest {
 
     private static void testIndexFilter() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Index Filter" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Index Filter" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 
@@ -479,9 +505,150 @@ public class ExpressoTest {
         check("Index counter includes all four events", Expresso.getCurrentEventCount() == 4);
     }
 
+    private static void testPIDTag() {
+        reset();
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(
+            ExposureCategory.TEST,
+            Expresso.BOLD + "Testing Process ID (PID) Tag" + Expresso.RESET
+        );
+        test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        reset();
+
+        StringBuilder output = new StringBuilder();
+        long expectedPID = ProcessHandle.current().pid();
+
+        Expresso.setBridge(output::append);
+        Expresso.enablePIDTag(true);
+
+        test.l1(ExposureCategory.TEST, "PID test\n");
+
+        boolean containsPID = output.toString().contains("[PID:" + expectedPID + "]");
+
+        Expresso.clearBridges();
+
+        check("PID tag contains current process ID", containsPID);
+
+        reset();
+    }
+
+
+    private static void testTIDTag() {
+        reset();
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(
+            ExposureCategory.TEST,
+            Expresso.BOLD + "Testing Thread ID (TID) Tag" + Expresso.RESET
+        );
+        test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        reset();
+
+        StringBuilder output = new StringBuilder();
+        long expectedTID = Thread.currentThread().threadId();
+
+        Expresso.setBridge(output::append);
+        Expresso.enableTIDTag(true);
+
+        test.l1(ExposureCategory.TEST, "TID test\n");
+
+        boolean containsTID = output.toString().contains("[TID:" + expectedTID + "]");
+
+        Expresso.clearBridges();
+
+        check("TID tag contains current thread ID", containsTID);
+
+        reset();
+    }
+
+
+    private static void testTIDFilter() {
+        reset();
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(
+            ExposureCategory.TEST,
+            Expresso.BOLD + "Testing Thread ID (TID) Filtering" + Expresso.RESET
+        );
+        test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        reset();
+
+        StringBuilder output = new StringBuilder();
+        long currentTID = Thread.currentThread().threadId();
+
+        Expresso.setBridge(output::append);
+        Expresso.setTIDFilter(currentTID + 1);
+
+        test.l1(ExposureCategory.TEST, "Filtered message\n");
+
+        boolean rejectedUnselectedThread = output.length() == 0;
+
+        Expresso.clearTIDFilter();
+        test.l1(ExposureCategory.TEST, "Allowed message\n");
+
+        boolean acceptedAfterClearingFilter = output.toString().contains("Allowed message");
+
+        boolean filteredMessageAbsent = !output.toString().contains("Filtered message");
+
+        Expresso.clearBridges();
+
+        check(
+            "TID filter rejects an unselected thread",
+            rejectedUnselectedThread
+        );
+
+        check(
+            "Filtered message remains absent",
+            filteredMessageAbsent
+        );
+
+        check(
+            "Clearing TID filter restores output",
+            acceptedAfterClearingFilter
+        );
+
+        reset();
+    }
+
+
+    private static void testPIDTIDReset() {
+        reset();
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(
+            ExposureCategory.TEST,
+            Expresso.BOLD + "Testing PID and TID Reset Behavior" + Expresso.RESET
+        );
+        test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        reset();
+
+        Expresso.enablePIDTag(true);
+        Expresso.enableTIDTag(true);
+        Expresso.setTIDFilter(Thread.currentThread().threadId());
+
+        Expresso.reset();
+
+        StringBuilder output = new StringBuilder();
+        Expresso.setBridge(output::append);
+
+        test.l1(ExposureCategory.TEST, "After reset\n");
+
+        String result = output.toString();
+
+        boolean pidTagDisabled = !result.contains("[PID:");
+        boolean tidTagDisabled = !result.contains("[TID:");
+        boolean tidFilterCleared = result.contains("After reset");
+
+        Expresso.clearBridges();
+
+        check("PID tag disabled after reset", pidTagDisabled);
+        check("TID tag disabled after reset", tidTagDisabled);
+        check("TID filter cleared after reset", tidFilterCleared);
+
+        reset();
+    }
+
     private static void testResetState() {
         reset();
-        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "\nTesting Reset Function" + Expresso.RESET);
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST,  Expresso.BOLD + "Testing Reset Function" + Expresso.RESET);
         test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
         reset();
 

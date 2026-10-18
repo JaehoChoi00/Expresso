@@ -93,6 +93,8 @@ Exposure
     ├── Category
     ├── Level
     ├── Time
+    ├── Process ID (PID)
+    ├── Thread ID (TID)
     ├── Error Styling
     ├── HERE Styling
     └── ANSI Formatting
@@ -347,6 +349,10 @@ The test suite covers core Expresso behavior, including:
 * External bridges
 * Event counter behavior
 * Reset behavior
+* Process ID (PID) tag
+* Thread ID (TID) tag
+* Thread ID filtering and filter clearing
+* PID/TID reset behavior
 
 ***To run only the thread test:***
 
@@ -457,6 +463,7 @@ Expresso does not require consumers to use its formatting constants.
 > * [Category Filtering](#category-filtering)
 > * [Tag Visibility](#tag-visibility)
 > * [Event Index Filtering](#event-index-filtering)
+> * [Thread ID Filtering](#thread-id-filtering)
 > * [Reset](#reset)
 > * [Diagnositc Styling](#diagnostic-styling)
 
@@ -520,31 +527,7 @@ produces:
 
 Category names therefore allow applications to define their own domain-specific exposure categories without modifying Expresso's built-in category enumeration.
 
-#### [Tag Visibility](#configuration-methods)
-
-```c
-void enableIndexTag(bool enable);
-
-void enableIdentityTag(bool enable);
-
-void enableCategoryTag(bool enable);
-
-void enableLevelTag(bool enable);
-
-void enableTimestamp(bool enable);
-
-void enableElapsedTime(bool enable);
-
-void enableApplicationTime(bool enable);
-
-void enableDiagnosticTags(bool enable);
-```
-
-Index, identity, category, and level tags are enabled by default.
-
-Timestamp, elapsed time, application time, and diagnostic tags are disabled by default.
-
-Tags control presentation metadata rather than exposure eligibility.
+---
 
 #### [Event Index Filtering](#configuration-methods)
 
@@ -586,6 +569,47 @@ Output
 An exposure rejected by category or level does not consume an event index.
 
 An exposure that receives an event index but falls outside the configured index range still advances the event counter.
+
+---
+
+
+#### [Thread ID Filtering](#configuration-methods)
+
+```c
+#include <stdint.h>
+#include <stddef.h>
+
+uint64_t tids[] = {1234, 5678};
+
+setTIDFilter(tids, 2);
+
+setTIDFilter(tids, 1);
+
+setTIDFilter(NULL, 0);
+
+clearTIDFilter();
+```
+
+`setTIDFilter()` restricts exposure events to the specified native thread IDs (TIDs).
+
+- `setTIDFilter(tids, 2)` allows events from either thread ID in the array.
+- `setTIDFilter(tids, 1)` allows events from the first thread ID in the array.
+- `setTIDFilter(NULL, 0)` creates an empty allowlist, preventing events from every thread from being emitted.
+- `clearTIDFilter()` removes the filter, allowing events from any thread that passes the other active filters.
+
+The function accepts a pointer to an array of `uint64_t` thread IDs and the number of IDs in that array.
+
+> [!Note]
+>
+> Thread ID filtering and TID tag visibility are independent.
+>
+> `setTIDFilter()` controls which events can be emitted.
+>
+> `enableTIDTag(true)` controls whether the TID appears in the output.
+>
+> Thread ID filtering is disabled by default. When no TID filter is active, events from any thread may be emitted if they pass the other active filters.
+
+---
 
 #### [Reset](#configuration-methods)
 
@@ -873,40 +897,46 @@ The bridge does not need to understand Expresso's filtering logic. It receives t
 
 ```text
 [Exposure Invoked]
-        │
-        ▼
-Is Category & Level Exposed?
-        │
-   ┌────┴────┐
-  No         Yes
-   │          │
-   ▼          ▼
-[Abort]   Increment Event Index
-              │
-              ▼
-       Check Index Range
-              │
-       ┌──────┴──────┐
-    Outside        Inside
-       │              │
-       ▼              ▼
-    [Abort]     Append Metadata
-                      │
-                      ▼
-                Format Message
-                      │
-                      ▼
-              Are Bridges Active?
-                      │
-                ┌─────┴─────┐
-               Yes          No
-                │           │
-                ▼           ▼
-        Dispatch to All   stdout
-        Registered Bridges
-                │
-                ▼
-            [Complete]
+             │
+             ▼
+    Is Category & Level Exposed?
+             │
+       ┌─────┴──────┐
+      No           Yes
+       │            │
+       ▼            ▼
+    [Abort]   Does TID Pass Filter?
+                    │
+              ┌─────┴─────┐
+             No          Yes
+              │           │
+              ▼           ▼
+           [Abort]  Increment Event Index
+                          │
+                          ▼
+                   Check Index Range
+                          │
+                   ┌──────┴──────┐
+                Outside        Inside
+                   │              │
+                   ▼              ▼
+                [Abort]    Append Metadata
+                                  │
+                                  ▼
+                           Format Message
+                                  │
+                                  ▼
+                          Are Bridges Active?
+                                  │
+                            ┌─────┴─────┐
+                           Yes          No
+                            │           │
+                            ▼           ▼
+                     Dispatch to All  print()
+                     Registered Bridges
+                            │
+                            ▼
+                       [Complete]
 ```
 
 Expresso determines what information becomes visible. The consuming application determines where that output is delivered and what happens to it.
@@ -1201,9 +1231,21 @@ These helpers provide component-local access to common Expresso operations while
 #### [Example](#core-api-integration)
 
 ```c
-#include "Expresso.h"
-#include "Exposure.h"
-#include "ExposureCategory.h"
+#include <stdio.h>
+#include <string.h>
+
+#include "expresso/Expresso.h"
+#include "expresso/Exposure.h"
+#include "expresso/ExposureCategory.h"
+#include "expresso/VariableConstants.h"
+
+static void testBridge(const char *rawText) {
+    if (rawText == NULL) {
+        return;
+    }
+
+    printf("[BRIDGE PIPELINE LOG]: %s", rawText);
+}
 
 int main(void) {
     Exposure alu = createWithIdentity("ALU");
@@ -1213,63 +1255,37 @@ int main(void) {
     setCategories(
         EXPOSURE_COMPONENTIAL,
         EXPOSURE_LOWERLEVEL,
-        END_CATEGORY
+        (ExposureCategory){NONE, NULL}
     );
 
     setLevels(
         LEVEL1,
         LEVEL5,
-        END_LEVEL
+        (ExposureLevel)0
     );
 
     enableTimestamp(true);
-    enableApplicationTime(false);
+    enableElapsedTime(true);
+    enablePIDTag(true);
+    enableTIDTag(true);
 
-    void bridge(const char *text) {
-        printf("[BRIDGE PIPELINE LOG]: %s", text);
-    }
+    setBridge(testBridge);
 
-    setBridge(bridge);
+    l1(&alu, EXPOSURE_COMPONENTIAL, BOLD "ALU Unit Initialized -> " RESET FG_GREEN "READY" RESET "\n");
 
-    l1(
-        &alu,
-        EXPOSURE_COMPONENTIAL,
-        BOLD
-        "ALU Unit Initialized -> "
-        RESET
-        FG_GREEN
-        "READY"
-        RESET
-        "\n"
-    );
+    l3(&alu, EXPOSURE_COMPONENTIAL, "Intermediate Bus Clock: 400MHz\n");
 
-    l3(
-        &alu,
-        EXPOSURE_COMPONENTIAL,
-        "Intermediate Bus Clock: 400MHz\n"
-    );
+    l5(&alu, EXPOSURE_LOWERLEVEL, "NAND Gate Transistor Logic Validated.\n");
 
-    l5(
-        &alu,
-        EXPOSURE_LOWERLEVEL,
-        "NAND Gate Transistor Logic Validated.\n"
-    );
-
-    lbr(
-        &alu,
-        EXPOSURE_COMPONENTIAL,
-        LEVEL1
-    );
+    lbr(&alu, EXPOSURE_COMPONENTIAL, LEVEL1);
 
     here(&alu);
 
-    hereLabel(&alu, "This is the label.");
+    hereLabel(&alu, "Reached ALU validation stage");
 
-    err(
-        &alu,
-        "Execution failed during register calculation [%s]\n",
-        "DIV_ZERO"
-    );
+    err(&alu, "Execution failed during register calculation [%s]", "DIV_ZERO");
+
+    reset();
 
     return 0;
 }
@@ -1302,14 +1318,12 @@ ALU
 #### [Example Output](#core-api-integration)
 
 ```text
-[BRIDGE PIPELINE LOG]: [2026-09-24 01:44:49.099] [#1] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY
-
-[BRIDGE PIPELINE LOG]: [2026-09-24 01:44:49.100] [#2] [ALU] [LOWERLEVEL] [LEVEL5] NAND Gate Transistor Logic Validated.
-
-[BRIDGE PIPELINE LOG]:
+[BRIDGE PIPELINE LOG]: [2026-10-14 12:23:41.671] [0.000s] [#1] [PID:45352] [TID:407671422] [ALU] [COMPONENTIAL] [LEVEL1] ALU Unit Initialized -> READY
+[BRIDGE PIPELINE LOG]: [2026-10-14 12:23:41.671] [0.000s] [#2] [PID:45352] [TID:407671422] [ALU] [LOWERLEVEL] [LEVEL5] NAND Gate Transistor Logic Validated.
+[BRIDGE PIPELINE LOG]: 
 --------------------------------
 [BRIDGE PIPELINE LOG]: --> [EXPRESSO REPORT HERE] [ALU]
-[BRIDGE PIPELINE LOG]: --> [EXPRESSO REPORT HERE] [ALU]: This is the label.
+[BRIDGE PIPELINE LOG]: --> [EXPRESSO REPORT HERE] [ALU]: Reached ALU validation stage
 [BRIDGE PIPELINE LOG]: [ERROR]: [ALU] Execution failed during register calculation [DIV_ZERO]
 ```
 
@@ -1397,24 +1411,25 @@ Expresso is divided into separate responsibilities:
                     └──────────┬───────────┘
                                │
                                ▼
-        ┌──────────────────────────────────────────────────┐
-        │                     EXPRESSO                     │
-        │                                                  │
-        │  Category ──┐                                    │
-        │  Level ─────┤                                    │
-        │  Index ─────┤──> Exposure Evaluation             │
-        │  Identity ──┤          │                         │
-        │  Time ──────┘          ▼                         │
-        │                     Formatting                   │
-        │                          │                       │
-        └──────────────────────────┼───────────────────────┘
-                                   │
-                                   ▼
-                            Output Function
-                                   │
-                       ┌───────────┼───────────┐
-                       ▼           ▼           ▼
-                      UI          File       Console
+    ┌───────────────────────────────────────────────────────┐
+    │                       EXPRESSO                        │
+    │                                                       │
+    │  Category ──┐                                         │
+    │  Level ─────┤                                         │
+    │  Index ─────┤                                         │
+    │  Identity ──┤──> Exposure Evaluation ──> Formatting   │
+    │  PID ───────┤                                         │
+    │  TID ───────┤                                         │
+    │  Time ──────┘                                         │
+    │                                                       │
+    └──────────────────────────┬────────────────────────────┘
+                               │
+                               ▼
+                        Consumer<String>
+                               │
+                  ┌────────────┼────────────┐
+                  ▼            ▼            ▼
+                  UI          File       Console
 ```
 
 The framework therefore provides **visibility without ownership**.

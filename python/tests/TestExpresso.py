@@ -1,3 +1,6 @@
+import os
+from threading import Thread, get_native_id
+
 from expresso import Expresso, Exposure, ExposureCategory, ExposureLevel
 
 print("\nDEFAULT: ")
@@ -222,6 +225,119 @@ exposure.l1(ExposureCategory.DEBUG, "Event 4\n")
 exposure.l1(ExposureCategory.DEBUG, "Event 5\n")
 exposure.l1(ExposureCategory.DEBUG, "Event 6\n")
 
+print("\nPID AND TID TAGS: ")
+
+Expresso.clearIndexFilter()
+Expresso.resetEventCounter()
+
+Expresso.enablePIDTag(True)
+Expresso.enableTIDTag(True)
+
+exposure.l1(ExposureCategory.SYSTEMLOG, "PID and TID enabled\n")
+
+print("Expected PID:", os.getpid())
+print("Expected TID:", get_native_id())
+
+
+print("\nPID ONLY: ")
+
+Expresso.enablePIDTag(True)
+Expresso.enableTIDTag(False)
+
+exposure.l1(ExposureCategory.SYSTEMLOG, "Only PID should appear\n")
+
+
+print("\nTID ONLY: ")
+
+Expresso.enablePIDTag(False)
+Expresso.enableTIDTag(True)
+
+exposure.l1(ExposureCategory.SYSTEMLOG, "Only TID should appear\n")
+
+
+print("\nPID AND TID DISABLED: ")
+
+Expresso.enablePIDTag(False)
+Expresso.enableTIDTag(False)
+
+exposure.l1(ExposureCategory.SYSTEMLOG, "Neither PID nor TID should appear\n")
+
+
+print("\nTHREAD IDENTITY: ")
+
+Expresso.enablePIDTag(True)
+Expresso.enableTIDTag(True)
+
+mainPID = os.getpid()
+mainTID = get_native_id()
+
+def worker():
+    workerPID = os.getpid()
+    workerTID = get_native_id()
+
+    exposure.l1(
+        ExposureCategory.SYSTEMLOG,
+        "Exposure emitted from worker thread\n"
+    )
+
+    print("Main PID:", mainPID)
+    print("Worker PID:", workerPID)
+    print("Main TID:", mainTID)
+    print("Worker TID:", workerTID)
+
+workerThread = Thread(target=worker)
+workerThread.start()
+workerThread.join()
+
+print("\nTID FILTER TEST: ")
+
+Expresso.reset()
+
+capturedOutput = []
+Expresso.setBridge(capturedOutput.append)
+
+mainTID = get_native_id()
+
+Expresso.setTIDFilter(mainTID)
+
+exposure.l1(
+    ExposureCategory.SYSTEMLOG,
+    "MAIN THREAD EVENT\n"
+)
+
+def filteredWorker():
+    exposure.l1(
+        ExposureCategory.SYSTEMLOG,
+        "WORKER THREAD EVENT\n"
+    )
+
+workerThread = Thread(target=filteredWorker)
+workerThread.start()
+workerThread.join()
+
+print("Main event emitted:", any("MAIN THREAD EVENT" in text for text in capturedOutput))
+
+print("Worker event rejected:",not any("WORKER THREAD EVENT" in text for text in capturedOutput))
+
+print("Main TID:", mainTID)
+
+capturedOutput.clear()
+Expresso.clearTIDFilter()
+
+workerThread = Thread(target=filteredWorker)
+workerThread.start()
+workerThread.join()
+
+print("Worker event emitted after clearing filter:",any("WORKER THREAD EVENT" in text for text in capturedOutput))
+
+Expresso.clearBridges()
+Expresso.clearTIDFilter()
+
+
+print("\nRESTORE TAG SETTINGS: ")
+
+Expresso.enablePIDTag(False)
+Expresso.enableTIDTag(False)
 
 print("\nRESET: ")
 

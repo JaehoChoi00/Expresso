@@ -383,6 +383,54 @@ int main(void) {
     enableApplicationTime(false);
     enableDiagnosticTags(false);
 
+        printf("\n");
+
+    printf(" Process / Thread IDs (PID / TID) \n\n");
+
+    reset();
+
+    setLevel(LEVEL5);
+    setCategory(EXPOSURE_TEST);
+
+    enableDiagnosticTags(true);
+    enablePIDTag(true);
+    enableTIDTag(true);
+
+    printf("Expected: diagnostic output contains PID and TID tags.\n\n");
+
+    l1(&exposure, EXPOSURE_TEST, "PID/TID diagnostic test\n");
+
+    printf("\n");
+
+    printf(" Process / Thread ID Tag Controls \n\n");
+
+    enablePIDTag(false);
+    l1(&exposure, EXPOSURE_TEST, "PID enabled state: disabled\n");
+
+    enablePIDTag(true);
+    l1(&exposure, EXPOSURE_TEST, "PID enabled state: enabled\n");
+
+    enableTIDTag(false);
+    l1(&exposure, EXPOSURE_TEST, "TID enabled state: disabled\n");
+
+    enableTIDTag(true);
+    l1(&exposure, EXPOSURE_TEST, "TID enabled state: enabled\n");
+
+    printf("\n");
+
+    printf(" PID / TID Across Threads \n\n");
+
+    enablePIDTag(true);
+    enableTIDTag(true);
+
+    l1(&exposure, EXPOSURE_TEST, "Main thread PID/TID\n");
+
+    printf("Compare the IDs above with the multithreaded test output.\n");
+
+    enablePIDTag(false);
+    enableTIDTag(false);
+    enableDiagnosticTags(false);
+
     printf("\n");
 
     printf(" Direct Emit \n\n");
