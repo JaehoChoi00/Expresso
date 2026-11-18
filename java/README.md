@@ -33,6 +33,10 @@ Expresso is a lightweight exposure and diagnostic framework built around a **2D 
 ```text
 Exposure
 │
+├── Global & Local Switches
+│   ├── Expresso.ON(boolean)
+│   └── Exposure.setEnabled(boolean)
+│
 ├── Category Domain Set
 │   └── ExposureCategory
 │       ├── VANILLA
@@ -116,9 +120,9 @@ The Java implementation can be used directly from source or packaged as a standa
 
 #### [Requirements](#installation--build)
 
-* Java Development Kit (JDK)
-* `javac`
-* `jar`
+- Java Development Kit (JDK)
+- `javac`
+- `jar`
 
 ---
 
@@ -153,13 +157,13 @@ java -cp build/classes ExpressoTest
 A successful run produces:
 
 ```text
-[2026-09-11 19:38:44.157] [#1] [ExpressoTest] [TEST] EXPRESSO TEST SUITE START
+[2026-11-18 03:44:09.233] [#1] [ExpressoTest] [TEST] EXPRESSO TEST SUITE START
 --------------------------------
 
 ...
 
 Testing complete
-[#6] [ExpressoTest] [TEST] [LEVEL1] PASSED: 46
+[#6] [ExpressoTest] [TEST] [LEVEL1] PASSED: 80
 [#7] [ExpressoTest] [TEST] [LEVEL1] FAILED: 0
 
 --------------------------------
@@ -168,23 +172,24 @@ Testing complete
 
 The test suite verifies core Expresso behavior, including:
 
-* Exposure creation
-* Category filtering
-* Level filtering
-* Lazy `Supplier<String>` evaluation
-* Formatting
-* Error reporting
-* Execution markers
-* Timestamp output
-* Runtime elapsed time
-* Event indexing
-* Index filtering
-* Dynamic categories
-* Reset behavior
-* Process ID (PID) tag
-* Thread ID (TID) tag
-* Thread ID filtering and filter clearing
-* PID/TID reset behavior
+- Exposure creation
+- Category filtering
+- Level filtering
+- Lazy `Supplier<String>` evaluation
+- Global and per-handle enable/disable toggles
+- Formatting
+- Error reporting
+- Execution markers
+- Timestamp output
+- Runtime elapsed time
+- Event indexing
+- Index filtering
+- Dynamic categories
+- Reset behavior
+- Process ID (PID) tag
+- Thread ID (TID) tag
+- Thread ID filtering and filter clearing
+- PID/TID reset behavior
 
 ---
 
@@ -193,14 +198,14 @@ The test suite verifies core Expresso behavior, including:
 Create the distributable JAR:
 
 ```bash
-jar cf build/expresso-0.0.4.jar -C build/classes shared/javaUtil
+jar cf build/expresso-0.0.5.jar -C build/classes shared/javaUtil
 ```
 
 The resulting library is:
 
 ```text
 build/
-└── expresso-0.0.4.jar
+└── expresso-0.0.5.jar
 ```
 
 The JAR contains the compiled `shared.javaUtil` library and does not include the test program.
@@ -212,7 +217,7 @@ The JAR contains the compiled `shared.javaUtil` library and does not include the
 Inspect the packaged classes:
 
 ```bash
-jar tf build/expresso-0.0.4.jar
+jar tf build/expresso-0.0.5.jar
 ```
 
 The JAR should contain:
@@ -261,7 +266,7 @@ javac -cp build/classes -d build/classes test/ExpressoTest.java
 
 java -cp build/classes ExpressoTest
 
-jar cf build/expresso-0.0.1.jar -C build/classes shared/javaUtil
+jar cf build/expresso-0.0.5.jar -C build/classes shared/javaUtil
 ```
 
 ---
@@ -289,6 +294,7 @@ Fetches an ANSI indexed 256-color foreground or background escape sequence.
 
 ### [Configuration Methods](#sections)
 
+> * [Global & Local Output Control](#global--local-output-control)
 > * [Level Filtering](#level-filtering)
 > * [Category Filtering](#category-filtering)
 > * [Tag Visibility](#tag-visibility)
@@ -296,6 +302,29 @@ Fetches an ANSI indexed 256-color foreground or background escape sequence.
 > * [Thread ID Filtering](#thread-id-filtering)
 > * [Reset](#reset)
 > * [Diagnostic Styling](#diagnostic-styling)
+
+---
+
+#### [Global & Local Output Control](#configuration-methods)
+
+```java
+// Global Expresso switch
+public static void ON(boolean enable);
+
+public static boolean isOn();
+
+// Per-handle Exposure switch
+public void setEnabled(boolean enabled);
+
+public boolean isEnabled();
+```
+
+`Expresso.ON(false)` acts as a global kill-switch across all standard exposure logging (`printf`, `NEWLINE`, `LINEBREAK`, `isExposed`, and all `Exposure` handles), while `exposure.setEnabled(false)` silences only that specific `Exposure` instance without affecting other handles.
+
+> [!NOTE]
+> Disabling either the global `Expresso` switch or a local `Exposure` handle suppresses standard telemetry and skips lazy `Supplier<String>` evaluation.
+> 
+> Unrestricted diagnostic utilities (`err()` / `Expresso.error()` and `here()` / `Expresso.hereAnnounce()`) remain active so critical errors and execution markers are never silently swallowed.
 
 ---
 
@@ -417,10 +446,10 @@ Expresso.clearTIDFilter();
 
 `setTIDFilter()` restricts exposure events to the specified native thread IDs (TIDs).
 
-* `Expresso.setTIDFilter(1234L)` allows events from thread 1234.
-* `Expresso.setTIDFilter(1234L, 5678L)` allows events from either thread.
-* `Expresso.setTIDFilter()` creates an empty allowlist, preventing events from every thread from being emitted.
-* `Expresso.clearTIDFilter()` removes the filter, allowing events from any thread that passes the other active filters.
+- `Expresso.setTIDFilter(1234L)` allows events from thread 1234.
+- `Expresso.setTIDFilter(1234L, 5678L)` allows events from either thread.
+- `Expresso.setTIDFilter()` creates an empty allowlist, preventing events from every thread from being emitted.
+- `Expresso.clearTIDFilter()` removes the filter, allowing events from any thread that passes the other active filters.
 
 > [!Note]
 >
@@ -485,7 +514,7 @@ public static boolean isExposed(
         ExposureCategory category,
         ExposureLevel requiredLevel
 ) {
-    if (category == null || requiredLevel == null) return false;
+    if (!ON || category == null || requiredLevel == null) return false;
 
     Set<String> activeCategories = enabledCategories;
 
@@ -735,44 +764,51 @@ The bridge receives the formatted output after Expresso has applied its exposure
 [Exposure.printf() Invoked]
              │
              ▼
-    Is Category & Level Exposed?
+    Is Handle Locally Enabled?
              │
        ┌─────┴──────┐
       No           Yes
        │            │
        ▼            ▼
-    [Abort]   Does TID Pass Filter?
+    [Abort]   Is Expresso ON &
+              Category/Level Exposed?
                     │
-              ┌─────┴─────┐
-             No          Yes
-              │           │
-              ▼           ▼
-           [Abort]  Increment Event Index
-                          │
-                          ▼
-                   Check Index Range
-                          │
-                   ┌──────┴──────┐
-                Outside        Inside
-                   │              │
-                   ▼              ▼
-                [Abort]    Append Metadata
-                                  │
-                                  ▼
-                           Format Message
-                                  │
-                                  ▼
-                          Are Bridges Active?
-                                  │
-                            ┌─────┴─────┐
-                           Yes          No
-                            │           │
-                            ▼           ▼
-                     Dispatch to All  print()
-                     Registered Bridges
-                            │
-                            ▼
-                       [Complete]
+              ┌─────┴──────┐
+             No           Yes
+              │            │
+              ▼            ▼
+           [Abort]   Does TID Pass Filter?
+                           │
+                     ┌─────┴─────┐
+                    No          Yes
+                     │           │
+                     ▼           ▼
+                  [Abort]  Increment Event Index
+                                 │
+                                 ▼
+                          Check Index Range
+                                 │
+                          ┌──────┴──────┐
+                       Outside        Inside
+                          │              │
+                          ▼              ▼
+                       [Abort]    Append Metadata
+                                         │
+                                         ▼
+                                  Format Message
+                                         │
+                                         ▼
+                                 Are Bridges Active?
+                                         │
+                                   ┌─────┴─────┐
+                                  Yes          No
+                                   │           │
+                                   ▼           ▼
+                            Dispatch to All  print()
+                            Registered Bridges
+                                   │
+                                   ▼
+                              [Complete]
 ```
 
 Expresso determines what information is exposed. The developer determines where that information is delivered and which destinations are active.
@@ -912,6 +948,17 @@ The identity is automatically attached to emitted exposure events.
 
 This allows an application component to maintain its own exposure context without repeatedly supplying its identity to the underlying `Expresso` API.
 
+#### [Handle State Control](#exposure-depth)
+
+```java
+exposure.setEnabled(false); // Mute this specific Exposure handle
+exposure.isEnabled();       // Check whether this handle is locally enabled
+```
+
+Each `Exposure` handle maintains its own local `enabled` state (default `true`). Disabling a handle suppresses its standard exposure methods (`expose`, `l1`–`l5`, `nl`, `lbr`, `enabled`) without muting other `Exposure` instances or blocking unrestricted `err()` and `here()` calls.
+
+---
+
 #### [Shorthand Levels](#exposure-depth)
 
 ```java
@@ -945,7 +992,7 @@ exposure.l3(
 );
 ```
 
-The supplier is evaluated only when the category and level pass the active exposure filter.
+The supplier is evaluated only when the handle is enabled and the category and level pass the active exposure filter.
 
 This allows expensive diagnostic calculations to remain lazy when their exposure is disabled.
 

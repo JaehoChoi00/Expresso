@@ -1,6 +1,7 @@
 from expresso import Expresso, ExposureCategory, ExposureLevel
 
 exposure = Expresso.exposure("ALU")
+bus = Expresso.exposure("BUS")
 
 Expresso.setCategories(
     ExposureCategory.COMPONENTIAL,
@@ -34,6 +35,16 @@ exposure.l1(
 exposure.l3(ExposureCategory.COMPONENTIAL, "Intermediate Bus Clock: 400MHz\n")
 
 exposure.l5(ExposureCategory.LOWERLEVEL, "NAND Gate Transistor Logic Validated.\n")
+
+# Mute only the BUS handle locally while ALU remains active
+bus.setEnabled(False)
+bus.l1(ExposureCategory.COMPONENTIAL, "Bus telemetry suppressed locally\n")
+bus.setEnabled(True)
+
+# Temporarily mute all standard telemetry globally (diagnostics remain unrestricted)
+Expresso.ON(False)
+exposure.l1(ExposureCategory.COMPONENTIAL, "Suppressed while Expresso is globally OFF\n")
+Expresso.ON(True)
 
 exposure.lbr(ExposureCategory.COMPONENTIAL, ExposureLevel.LEVEL1)
 

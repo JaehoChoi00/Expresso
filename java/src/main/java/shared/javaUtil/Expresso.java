@@ -28,7 +28,9 @@ public final class Expresso {
 
     private static volatile long minIndex = 0;
     private static volatile long maxIndex = Long.MAX_VALUE;
-    
+
+    private static volatile boolean ON = true;
+
     private static volatile boolean showIndexTag = true;
     private static volatile boolean showIdentityTag = true;
     private static volatile boolean showCategoryTag = true;
@@ -126,6 +128,20 @@ public final class Expresso {
      * @return A new Exposure instance.
      */
     public static Exposure exposure(String identity) { return new Exposure(identity); }
+
+    /**
+     * Toggles the full display of global Expresso log outputs.
+     * 
+     * @param enable Default is set to {@code true}.
+     */
+    public static void ON(boolean enable) { ON = enable; }
+
+    /**
+     * Returns whether global Expresso log output is currently enabled.
+     *
+     * @return {@code true} if enabled, {@code false} if globally muted.
+     */
+    public static boolean isOn() { return ON; }
 
     /**
      * Toggles the display of the global event index tag in the log output.
@@ -437,7 +453,7 @@ public final class Expresso {
      * Sets multiple external bridges, replacing all currently registered bridges.
      * Each non-null bridge receives the same formatted output string.
      * Duplicate bridges are ignored.
-     *
+     * 
      * @param bridges The consumers that will receive output strings.
      */
     @SafeVarargs
@@ -453,14 +469,14 @@ public final class Expresso {
     /**
      * Adds an external bridge without replacing existing bridges.
      * Duplicate bridges and {@code null} values are ignored.
-     *
+     * 
      * @param bridge The consumer to add as an output destination.
      */
     public static void addBridge(Consumer<String> bridge) { if (bridge != null) externalBridges.addIfAbsent(bridge); }
 
     /**
      * Removes a registered external bridge.
-     *
+     * 
      * @param bridge The consumer to remove.
      * @return {@code true} if the bridge was removed; {@code false} otherwise.
      */
@@ -474,11 +490,10 @@ public final class Expresso {
     
     /**
      * Resets Expresso to its default runtime exposure state.
-     *
+     * 
      * Clears category and index filters, restores LEVEL1, resets the event counter,
      * disables optional time tags, and removes the external bridge.
      */
-
     public static void reset() {
         clearAllCategories();
         setLevel(ExposureLevel.LEVEL1);
@@ -503,7 +518,7 @@ public final class Expresso {
      * @return {@code true} if the event passes all active filters, {@code false} otherwise.
      */
     public static boolean isExposed(ExposureCategory category, ExposureLevel requiredLevel) {
-        if (category == null || requiredLevel == null) return false;
+        if (!ON || category == null || requiredLevel == null) return false;
         
         Set<String> activeCategories = enabledCategories;
         if (!activeCategories.isEmpty() && !activeCategories.contains(category.name())) {
@@ -683,7 +698,7 @@ public final class Expresso {
     /**
      * Debugging utility that forcibly prints a highly visible marker
      * with an optional identity tag to trace code execution paths.
-     *
+
      * @param identity Identity associated with the execution marker.
      */
     public static void hereAnnounce(String identity) {
@@ -701,7 +716,7 @@ public final class Expresso {
     /**
      * Debugging utility that forcibly prints a highly visible marker
      * alongside an optional identity and specific label to trace code execution paths.
-     *
+     * 
      * @param identity Identity associated with the exposure.
      * @param label    Additional context or identifying text.
      */
@@ -719,7 +734,7 @@ public final class Expresso {
         
         stringBuilder.append("\n");
         emit(stringBuilder.toString());
-        
+
     }
 
     /**

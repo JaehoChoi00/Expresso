@@ -14,6 +14,8 @@ from . import variable_constants
 
 class Expresso:
 
+    On = True
+
     globalEventCounter = 0
     counterLock = Lock()
 
@@ -90,6 +92,12 @@ class Expresso:
 
     @staticmethod
     def BG_COLOR(id): return variable_constants.BG_COLOR(id)
+
+    @staticmethod
+    def ON(enable): Expresso.On = bool(enable)
+
+    @staticmethod
+    def isON(): return Expresso.On
 
     @staticmethod
     def exposure(identity = None): 
@@ -295,7 +303,7 @@ class Expresso:
 
     @staticmethod
     def isExposed(category, requiredLevel):
-        if category is None or requiredLevel is None: return False
+        if not Expresso.On or category is None or requiredLevel is None: return False
         with Expresso.categoriesLock:
             activeCategories = Expresso.enabledCategories
             if activeCategories and category.name not in activeCategories:

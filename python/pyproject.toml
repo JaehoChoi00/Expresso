@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "expresso-framework"
-version = "0.0.4"
+version = "0.0.5"
 authors = [
   { name = "Jaeho Choi", email = "jhc.jaehochoi@gmail.com" },
 ]

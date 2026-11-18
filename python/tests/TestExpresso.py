@@ -68,6 +68,39 @@ exposure.l1(ExposureCategory.SYSTEMLOG, "Engine started\n")
 exposure.l2(ExposureCategory.COMPONENTIAL, "Loading component: %s\n", "Renderer")
 exposure.l3(ExposureCategory.LOWERLEVEL, "Internal value: %d\n", 42)
 
+
+print("\nGLOBAL AND LOCAL TOGGLES: ")
+
+handleA = Expresso.exposure("HandleA")
+handleB = Expresso.exposure("HandleB")
+
+print("Default global ON:", Expresso.isON())
+print("Default handles ON:", handleA.isEnabled() and handleB.isEnabled())
+
+# Mute HandleA locally while keeping HandleB active
+handleA.setEnabled(False)
+handleA.l1(ExposureCategory.DEBUG, "This muted handle message will not appear\n")
+handleB.l1(ExposureCategory.DEBUG, "HandleB remains active while HandleA is muted\n")
+
+# Unrestricted diagnostics still emit when locally muted
+handleA.here("Diagnostics bypass local handle muting")
+handleA.setEnabled(True)
+
+# Global master kill-switch
+Expresso.ON(False)
+print("Global ON after ON(False):", Expresso.isON())
+
+handleA.l1(ExposureCategory.DEBUG, "Globally suppressed handle output\n")
+Expresso.printf(ExposureCategory.DEBUG, ExposureLevel.LEVEL1, "Globally suppressed static output\n")
+
+# Unrestricted diagnostics still emit when globally muted
+handleA.here("Diagnostics bypass global ON(False)")
+
+# Restore global state
+Expresso.ON(True)
+handleA.l1(ExposureCategory.DEBUG, "Global output restored\n")
+
+
 print("\nMULTIPLE BRIDGES: ")
 
 bridgeOutputA = []

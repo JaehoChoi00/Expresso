@@ -37,6 +37,10 @@ Expresso is a lightweight exposure and diagnostic framework built around a **2D 
 Exposure
 
 │
+├── Runtime Power Toggles
+│   ├── Global Switch (Expresso.ON)
+│   └── Handle Toggle (Exposure.setEnabled)
+│
 ├── Category Domain Set
 │   └── set
 │       ├── VANILLA
@@ -185,7 +189,7 @@ python -m unittest discover -s tests -v
 ```txt
 ...
 ----------------------------------------------------------------------
-Ran 41 tests
+Ran 42 tests
 
 OK
 ```
@@ -323,6 +327,7 @@ Fetches an ANSI indexed 256-color foreground or background escape sequence.
 
 ### [`Configuration Methods`](#sections)
 
+> * [Global & Local Runtime Toggles](#global--local-runtime-toggles)
 > * [Level Filtering](#level-filtering)
 > * [Category Filtering](#category-filtering)
 > * [Tag Visibility](#tag-visibility)
@@ -330,6 +335,23 @@ Fetches an ANSI indexed 256-color foreground or background escape sequence.
 > * [Thread ID Filtering](#thread-id-filtering)
 > * [Reset](#reset)
 > * [Diagnostic Styling](#diagnostic-styling)
+
+---
+
+#### [Global & Local Runtime Toggles](#configuration-methods)
+
+```py
+Expresso.ON(enable)
+
+Expresso.isON()
+```
+
+Controls the framework-wide master switch for standard exposure output.
+
+- Both the global switch (`Expresso.isON()`) and individual `Exposure` handles (`exposure.isEnabled()`) default to `True`.
+- Setting `Expresso.ON(False)` immediately silences all standard exposure calls (`printf`, `NEWLINE`, `LINEBREAK`, `expose`, `l1`–`l5`, `nl`, `lbr`) without altering active categories, levels, index filters, or TID rules.
+- Callables passed to lazy exposure calls short-circuit and are not evaluated while muted globally or locally.
+- Unrestricted diagnostic methods (`error`, `err`, `hereAnnounce`, `here`) remain active even when `Expresso.ON(False)` or `exposure.setEnabled(False)` is set.
 
 ---
 
@@ -433,10 +455,10 @@ Expresso.clearTIDFilter()
 ```
 
 `setTIDFilter()` restricts exposure events to the specified native thread IDs (TIDs).
-* `Expresso.setTIDFilter(1234)` allows events from thread 1234.
-* `Expresso.setTIDFilter(1234, 5678)` allows events from either thread.
-* `Expresso.setTIDFilter()` creates an empty allowlist, preventing events from every thread from being emitted.
-* `Expresso.clearTIDFilter()` removes the filter, allowing events from any thread that passes the other active filters.
+- `Expresso.setTIDFilter(1234)` allows events from thread 1234.
+- `Expresso.setTIDFilter(1234, 5678)` allows events from either thread.
+- `Expresso.setTIDFilter()` creates an empty allowlist, preventing events from every thread from being emitted.
+- `Expresso.clearTIDFilter()` removes the filter, allowing events from any thread that passes the other active filters.
 
 > [!NOTE]
 > Thread ID filtering and TID tag visibility are independent.  
@@ -451,6 +473,7 @@ Expresso.clearTIDFilter()
 
 ```py
 def reset():
+    Expresso.ON(True)
     Expresso.clearAllCategories()
     Expresso.setLevel(ExposureLevel.LEVEL1)
     Expresso.clearIndexFilter()
@@ -465,7 +488,7 @@ def reset():
 ```
 
 
-`reset()` restores Expresso to its default runtime state, including exposure filters, event indexing, timing options, and external bridge configuration.
+`reset()` restores Expresso to its default runtime state, including the global master switch, exposure filters, event indexing, timing options, and external bridge configuration.
 
 ---
 
@@ -491,11 +514,12 @@ When enabled, unrestricted diagnostic events such as `error()` and `hereAnnounce
 
 ### [`Dual-Mode Evaluation Logic`](#sections)
 
-Expresso determines its filtering mode from the number of enabled exposure levels.
+Expresso first verifies that the global switch (`Expresso.ON`) is enabled, then determines its filtering mode from the number of enabled exposure levels.
 
 ```py
 @staticmethod
 def isExposed(category, requiredLevel):
+    if not Expresso._expressoOn: return False
     if category is None or requiredLevel is None: return False
     with Expresso.categoriesLock:
         activeCategories = Expresso.enabledCategories
@@ -730,44 +754,50 @@ Bridges determine **where output is delivered**, not which exposures qualify for
 [Exposure.printf() Invoked]
              │
              ▼
-    Is Category & Level Exposed?
+  Is Expresso.ON & Handle Enabled?
              │
        ┌─────┴──────┐
       No           Yes
        │            │
        ▼            ▼
-    [Abort]   Does TID Pass Filter?
+    [Abort]   Is Category & Level Exposed?
                     │
-              ┌─────┴─────┐
-             No          Yes
-              │           │
-              ▼           ▼
-           [Abort]  Increment Event Index
-                          │
-                          ▼
-                   Check Index Range
-                          │
-                   ┌──────┴──────┐
-                Outside        Inside
-                   │              │
-                   ▼              ▼
-                [Abort]    Append Metadata
-                                  │
-                                  ▼
-                           Format Message
-                                  │
-                                  ▼
-                          Are Bridges Active?
-                                  │
-                            ┌─────┴─────┐
-                           Yes          No
-                            │           │
-                            ▼           ▼
-                     Dispatch to All  print()
-                     Registered Bridges
-                            │
-                            ▼
-                       [Complete]
+              ┌─────┴──────┐
+             No           Yes
+              │            │
+              ▼            ▼
+           [Abort]   Does TID Pass Filter?
+                           │
+                     ┌─────┴─────┐
+                    No          Yes
+                     │           │
+                     ▼           ▼
+                  [Abort]  Increment Event Index
+                                 │
+                                 ▼
+                          Check Index Range
+                                 │
+                          ┌──────┴──────┐
+                       Outside        Inside
+                          │              │
+                          ▼              ▼
+                       [Abort]    Append Metadata
+                                         │
+                                         ▼
+                                  Format Message
+                                         │
+                                         ▼
+                                 Are Bridges Active?
+                                         │
+                                   ┌─────┴─────┐
+                                  Yes          No
+                                   │           │
+                                   ▼           ▼
+                            Dispatch to All  print()
+                            Registered Bridges
+                                   │
+                                   ▼
+                              [Complete]
 ```
 
 Expresso determines what information is exposed. The developer determines where that information is delivered and which destinations are active.
@@ -821,7 +851,7 @@ Expresso.LINEBREAK(category, requiredLevel)
 Expresso.error(formatString, *args)
 ```
 
-> `error()` bypasses the normal exposure matrix.
+> `error()` bypasses the normal exposure matrix and runtime kill-switches.
 
 **Identity-bound diagnostic reporting**
 
@@ -829,7 +859,7 @@ Expresso.error(formatString, *args)
 exposure.err("Division failed\n", exception)
 ```
 
-> `err()` bypasses the normal exposure matrix and associates the diagnostic event with the `Exposure` identity.
+> `err()` bypasses the normal exposure matrix and runtime kill-switches, associating the diagnostic event with the `Exposure` identity.
 
 The complete traceback is then emitted.
 
@@ -843,7 +873,7 @@ Expresso.hereAnnounce()
 Expresso.hereAnnounce(label="Reached renderer initialization")
 ```
 
-These provide high-visibility execution markers for identifying code paths.
+These provide high-visibility execution markers for identifying code paths even when standard exposure output is muted.
 
 ---
 
@@ -856,6 +886,20 @@ exposure = Expresso.exposure("Renderer")
 ```
 
 The identity is automatically attached to emitted exposure events.
+
+#### [Handle Toggle & State](#exposure-depth)
+
+```py
+exposure.setEnabled(False)   # Mute only this handle's standard output
+
+exposure.isEnabled()         # Returns the handle's local enabled state
+
+exposure.enabled(category, level)  # True only if Expresso.isON(), handle is enabled, and matrix matches
+```
+
+Disabling an `Exposure` instance mutes only that handle's standard exposure methods (`expose`, `l1`–`l5`, `nl`, `lbr`). Other handles remain unaffected, and `exposure.err()` / `exposure.here()` continue to emit unconditionally.
+
+---
 
 #### [Shorthand Levels](#exposure-depth)
 
@@ -885,7 +929,7 @@ The generic method can also receive a callable.
 exposure.l3(ExposureCategory.DEBUG, lambda: expensiveDiagnosticCalculation())
 ```
 > [!NOTE]
-> The callable is evaluated **only when the category and level pass the active exposure filter**.
+> The callable is evaluated **only when `Expresso.isON()` is `True`, the handle is enabled, and the category and level pass the active exposure filter**.
 > 
 > Unrestricted diagnostic methods such as `err()` evaluate their callable when the diagnostic event is emitted.
 
@@ -1016,10 +1060,11 @@ Expresso is divided into separate responsibilities:
     ┌───────────────────────────────────────────────────────┐
     │                       EXPRESSO                        │
     │                                                       │
-    │  Category ──┐                                         │
+    │  Toggles ───┐                                         │
+    │  Category ──┤                                         │
     │  Level ─────┤                                         │
-    │  Index ─────┤                                         │
-    │  Identity ──┤──> Exposure Evaluation ──> Formatting   │
+    │  Index ─────┤──> Exposure Evaluation ──> Formatting   │
+    │  Identity ──┤                                         │
     │  PID ───────┤                                         │
     │  TID ───────┤                                         │
     │  Time ──────┘                                         │

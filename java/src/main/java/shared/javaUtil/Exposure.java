@@ -16,6 +16,8 @@ public final class Exposure {
 
     private final String identity;
 
+    private volatile boolean enabled = true;
+
     /**
      * Constructs a default package-private {@code Exposure} instance without an assigned identity tag.
      */
@@ -29,6 +31,25 @@ public final class Exposure {
     Exposure(String identity) { this.identity = identity; }
 
     /**
+     * Enables or disables standard log output for this specific {@code Exposure} handle.
+     * Does not affect unrestricted {@code err} or {@code here} diagnostic calls.
+     *
+     * @param enabled {@code true} to allow output from this handle, {@code false} to silence it.
+     */
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    /**
+     * Returns whether this specific {@code Exposure} handle is locally enabled.
+     *
+     * @return {@code true} if enabled, {@code false} if locally muted.
+     */
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    /**
      * Conditionally formats and emits a log message using the bound identity context.
      *
      * @param category The logging category.
@@ -37,6 +58,7 @@ public final class Exposure {
      * @param args     The format template arguments.
      */
     public void expose(ExposureCategory category, ExposureLevel level, String format, Object... args) {
+        if (!enabled) return;
         Expresso.printf(identity, category, level, format, args);
     }
     
@@ -48,6 +70,7 @@ public final class Exposure {
      * @param args     The format template arguments.
      */
     public void l1(ExposureCategory category, String format, Object... args) {
+        if (!enabled) return;
         Expresso.printf(identity, category, LEVEL1, format, args);
     }
 
@@ -59,6 +82,7 @@ public final class Exposure {
      * @param args     The format template arguments.
      */
     public void l2(ExposureCategory category, String format, Object... args) {
+        if (!enabled) return;
         Expresso.printf(identity, category, LEVEL2, format, args);
     }
 
@@ -70,6 +94,7 @@ public final class Exposure {
      * @param args     The format template arguments.
      */
     public void l3(ExposureCategory category, String format, Object... args) {
+        if (!enabled) return;
         Expresso.printf(identity, category, LEVEL3, format, args);
     }
 
@@ -81,6 +106,7 @@ public final class Exposure {
      * @param args     The format template arguments.
      */
     public void l4(ExposureCategory category, String format, Object... args) {
+        if (!enabled) return;
         Expresso.printf(identity, category, LEVEL4, format, args);
     }
 
@@ -92,6 +118,7 @@ public final class Exposure {
      * @param args     The format template arguments.
      */
     public void l5(ExposureCategory category, String format, Object... args) {
+        if (!enabled) return;
         Expresso.printf(identity, category, LEVEL5, format, args);
     }
 
@@ -100,15 +127,15 @@ public final class Exposure {
     /**
      * Conditionally evaluates and emits a lazy log message using the bound identity context.
      * <p>
-     * The {@link Supplier} is evaluated only if the category and level pass active exposure filters,
-     * preventing unnecessary string allocations in performance-critical code paths.
+     * The {@link Supplier} is evaluated only if this handle is enabled and the category and level
+     * pass active exposure filters, preventing unnecessary string allocations in performance-critical code paths.
      *
      * @param category The logging category.
      * @param level    The required exposure level.
      * @param message  A supplier yielding the log string.
      */
     public void expose(ExposureCategory category, ExposureLevel level, Supplier<String> message) {
-        if (!Expresso.isExposed(category, level)) return;
+        if (!enabled(category, level)) return;
         Expresso.printf(identity, category, level, "%s", message.get());
     }
 
@@ -119,7 +146,7 @@ public final class Exposure {
      * @param message  A supplier yielding the log string.
      */
     public void l1(ExposureCategory category, Supplier<String> message) {
-        if (!Expresso.isExposed(category, LEVEL1)) return;
+        if (!enabled(category, LEVEL1)) return;
         Expresso.printf(identity, category, LEVEL1, "%s", message.get());
     }
 
@@ -130,7 +157,7 @@ public final class Exposure {
      * @param message  A supplier yielding the log string.
      */
     public void l2(ExposureCategory category, Supplier<String> message) {
-        if (!Expresso.isExposed(category, LEVEL2)) return;
+        if (!enabled(category, LEVEL2)) return;
         Expresso.printf(identity, category, LEVEL2, "%s", message.get());
     }
 
@@ -141,7 +168,7 @@ public final class Exposure {
      * @param message  A supplier yielding the log string.
      */
     public void l3(ExposureCategory category, Supplier<String> message) {
-        if (!Expresso.isExposed(category, LEVEL3)) return;
+        if (!enabled(category, LEVEL3)) return;
         Expresso.printf(identity, category, LEVEL3, "%s", message.get());
     }
 
@@ -152,7 +179,7 @@ public final class Exposure {
      * @param message  A supplier yielding the log string.
      */
     public void l4(ExposureCategory category, Supplier<String> message) {
-        if (!Expresso.isExposed(category, LEVEL4)) return;
+        if (!enabled(category, LEVEL4)) return;
         Expresso.printf(identity, category, LEVEL4, "%s", message.get());
     }
 
@@ -163,40 +190,43 @@ public final class Exposure {
      * @param message  A supplier yielding the log string.
      */
     public void l5(ExposureCategory category, Supplier<String> message) {
-        if (!Expresso.isExposed(category, LEVEL5)) return;
+        if (!enabled(category, LEVEL5)) return;
         Expresso.printf(identity, category, LEVEL5, "%s", message.get());
     }
 
     // --- Helpers & Execution Utilities ---
 
     /**
-     * Checks whether a specific category and level combination is currently active in Expresso.
+     * Checks whether this handle is locally enabled and the specific category and level
+     * combination is currently active in Expresso.
      *
      * @param category The category to evaluate.
      * @param level    The level to evaluate.
-     * @return {@code true} if exposed, {@code false} otherwise.
+     * @return {@code true} if both locally enabled and globally exposed, {@code false} otherwise.
      */
     public boolean enabled(ExposureCategory category, ExposureLevel level) { 
-        return Expresso.isExposed(category, level); 
+        return enabled && Expresso.isExposed(category, level); 
     }
 
     /**
-     * Emits a double Expresso.NEWLINE to output if the category and level criteria are met.
+     * Emits a double Expresso.NEWLINE to output if this handle is enabled and the category and level criteria are met.
      *
      * @param category      The target category.
      * @param requiredLevel The required severity level.
      */
     public void nl(ExposureCategory category, ExposureLevel requiredLevel) {
+        if (!enabled) return;
         Expresso.NEWLINE(category, requiredLevel);
     }
 
     /**
-     * Emits a visual Expresso.LINEBREAK separator if the category and level criteria are met.
+     * Emits a visual Expresso.LINEBREAK separator if this handle is enabled and the category and level criteria are met.
      *
      * @param category      The target category.
      * @param requiredLevel The required severity level.
      */
     public void lbr(ExposureCategory category, ExposureLevel requiredLevel) {
+        if (!enabled) return;
         Expresso.LINEBREAK(category, requiredLevel);
     }
 

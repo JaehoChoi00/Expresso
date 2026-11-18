@@ -34,6 +34,7 @@ public class ExpressoTest {
         testDynamicCategory();
         testGenericExposure();
         testLazySupplier();
+        testGlobalAndLocalToggle();
         testBridges();
         testNewline();
         testLinebreak();
@@ -76,6 +77,7 @@ public class ExpressoTest {
 
     private static void reset() {
         Expresso.reset();
+        Expresso.ON(true);
 
         Expresso.enableIndexTag(true);
         Expresso.enableIdentityTag(true);
@@ -264,6 +266,111 @@ public class ExpressoTest {
                 );
 
         check("Lazy Supplier evaluates when exposed", executed[0]);
+    }
+
+    private static void testGlobalAndLocalToggle() {
+        reset();
+        test.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        test.l1(ExposureCategory.TEST, Expresso.BOLD + "Testing Global and Local Exposure Toggles" + Expresso.RESET);
+        test.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        reset();
+
+        Exposure handleA = Expresso.exposure("HandleA");
+        Exposure handleB = Expresso.exposure("HandleB");
+
+        StringBuilder output = new StringBuilder();
+        Expresso.setBridge(output::append);
+
+        // 1. Default enabled states
+        boolean defaultGlobalOn = Expresso.isOn();
+        boolean defaultHandlesOn = handleA.isEnabled() && handleB.isEnabled();
+
+        // 2. Local handle disable (HandleA muted, HandleB active)
+        final boolean[] localSupplierExecuted = {false};
+        handleA.setEnabled(false);
+
+        handleA.l1(ExposureCategory.TEST, "Muted handle message\n");
+        handleA.l1(ExposureCategory.TEST, () -> {
+            localSupplierExecuted[0] = true;
+            return "Muted supplier message\n";
+        });
+        handleA.nl(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        handleA.lbr(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+
+        boolean localEnabledCheckFalse = !handleA.enabled(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        boolean localMutedSilencedOutput = output.length() == 0;
+        boolean localMutedSkippedSupplier = !localSupplierExecuted[0];
+
+        handleB.l1(ExposureCategory.TEST, "Active handle message\n");
+        boolean activeHandleStillLogs = output.toString().contains("Active handle message");
+
+        // 3. Unrestricted diagnostics remain active when handle is locally muted
+        output.setLength(0);
+        handleA.err("Muted handle error\n");
+        handleA.here("Muted handle here");
+        boolean localMutedAllowsDiagnostics = output.toString().contains("Muted handle error")
+                && output.toString().contains("Muted handle here");
+
+        // Re-enable HandleA and verify recovery
+        output.setLength(0);
+        handleA.setEnabled(true);
+        handleA.l1(ExposureCategory.TEST, "Restored handle message\n");
+        boolean handleRestored = handleA.isEnabled()
+                && handleA.enabled(ExposureCategory.TEST, ExposureLevel.LEVEL1)
+                && output.toString().contains("Restored handle message");
+
+        // 4. Global Expresso toggle off
+        output.setLength(0);
+        final boolean[] globalSupplierExecuted = {false};
+        Expresso.ON(false);
+
+        boolean globalStateOff = !Expresso.isOn();
+        boolean globalIsExposedFalse = !Expresso.isExposed(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        boolean handleEnabledCheckFalseWhenGlobalOff = !handleA.enabled(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+
+        handleA.l1(ExposureCategory.TEST, "Globally muted handle message\n");
+        handleA.l1(ExposureCategory.TEST, () -> {
+            globalSupplierExecuted[0] = true;
+            return "Globally muted supplier\n";
+        });
+        Expresso.printf(ExposureCategory.TEST, ExposureLevel.LEVEL1, "Globally muted printf\n");
+        Expresso.NEWLINE(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+        Expresso.LINEBREAK(ExposureCategory.TEST, ExposureLevel.LEVEL1);
+
+        boolean globalOffSilencedLogs = output.length() == 0;
+        boolean globalOffSkippedSupplier = !globalSupplierExecuted[0];
+
+        // Unrestricted diagnostics remain active when globally muted
+        handleA.err("Global off error\n");
+        handleA.here("Global off here");
+        boolean globalOffAllowsDiagnostics = output.toString().contains("Global off error")
+                && output.toString().contains("Global off here");
+
+        // 5. Restore global switch
+        output.setLength(0);
+        Expresso.ON(true);
+        handleA.l1(ExposureCategory.TEST, "Global restored message\n");
+        boolean globalRestored = Expresso.isOn()
+                && output.toString().contains("Global restored message");
+
+        Expresso.clearBridges();
+
+        check("Expresso and Exposure handles are enabled by default", defaultGlobalOn && defaultHandlesOn);
+        check("Exposure.enabled() returns false when handle is disabled", localEnabledCheckFalse);
+        check("Disabling Exposure handle silences its standard output", localMutedSilencedOutput);
+        check("Disabling Exposure handle skips lazy Supplier evaluation", localMutedSkippedSupplier);
+        check("Disabling one Exposure handle does not affect other handles", activeHandleStillLogs);
+        check("Locally disabled Exposure handle still emits err() and here()", localMutedAllowsDiagnostics);
+        check("Re-enabling Exposure handle restores normal output", handleRestored);
+        check("Expresso.isOn() reflects disabled state", globalStateOff);
+        check("Expresso.isExposed() returns false when ON is false", globalIsExposedFalse);
+        check("Exposure.enabled() returns false when ON is false", handleEnabledCheckFalseWhenGlobalOff);
+        check("Global ON(false) silences all standard output", globalOffSilencedLogs);
+        check("Global ON(false) skips lazy Supplier evaluation", globalOffSkippedSupplier);
+        check("Global ON(false) still allows unrestricted err() and here()", globalOffAllowsDiagnostics);
+        check("Re-enabling ON(true) restores normal output", globalRestored);
+
+        reset();
     }
 
     private static void testBridges() {

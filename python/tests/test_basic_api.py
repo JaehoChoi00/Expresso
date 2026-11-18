@@ -7,6 +7,7 @@ from expresso import Expresso, Exposure, ExposureCategory, ExposureLevel
 class TestBasicApi(unittest.TestCase):
 
     def setUp(self):
+        Expresso.ON(True)
         Expresso.clearAllCategories()
         Expresso.setLevel(ExposureLevel.LEVEL1)
         Expresso.clearIndexFilter()
@@ -22,6 +23,7 @@ class TestBasicApi(unittest.TestCase):
         Expresso.setBridge(None)
 
     def tearDown(self):
+        Expresso.ON(True)
         Expresso.clearAllCategories()
         Expresso.setLevel(ExposureLevel.LEVEL1)
         Expresso.clearIndexFilter()
@@ -197,6 +199,101 @@ class TestBasicApi(unittest.TestCase):
         self.assertEqual(len(captured), 2)
         self.assertIn("Lazy message", captured[0])
         self.assertIn("Lazy deep message", captured[1])
+
+    # GLOBAL & LOCAL TOGGLES
+    def test_global_and_local_toggle(self):
+        captured = self.capture()
+
+        handle_a = Expresso.exposure("HandleA")
+        handle_b = Expresso.exposure("HandleB")
+
+        # 1. Default enabled states
+        self.assertTrue(Expresso.isON())
+        self.assertTrue(handle_a.isEnabled())
+        self.assertTrue(handle_b.isEnabled())
+
+        # 2. Local handle disable (HandleA muted, HandleB active)
+        local_supplier_executed = False
+        handle_a.setEnabled(False)
+
+        self.assertFalse(handle_a.isEnabled())
+        self.assertFalse(handle_a.enabled(ExposureCategory.DEBUG, ExposureLevel.LEVEL1))
+
+        def local_supplier():
+            nonlocal local_supplier_executed
+            local_supplier_executed = True
+            return "Muted supplier message"
+
+        handle_a.l1(ExposureCategory.DEBUG, "Muted handle message")
+        handle_a.l1(ExposureCategory.DEBUG, local_supplier)
+        handle_a.nl(ExposureCategory.DEBUG, ExposureLevel.LEVEL1)
+        handle_a.lbr(ExposureCategory.DEBUG, ExposureLevel.LEVEL1)
+
+        self.assertEqual(captured, [])
+        self.assertFalse(local_supplier_executed)
+
+        handle_b.l1(ExposureCategory.DEBUG, "Active handle message")
+        self.assertEqual(len(captured), 1)
+        self.assertIn("Active handle message", captured[0])
+
+        # 3. Unrestricted diagnostics remain active when handle is locally muted
+        captured.clear()
+        handle_a.err("Muted handle error")
+        handle_a.here("Muted handle here")
+
+        self.assertEqual(len(captured), 2)
+        self.assertIn("Muted handle error", captured[0])
+        self.assertIn("Muted handle here", captured[1])
+
+        # Re-enable HandleA and verify recovery
+        captured.clear()
+        handle_a.setEnabled(True)
+        handle_a.l1(ExposureCategory.DEBUG, "Restored handle message")
+
+        self.assertTrue(handle_a.isEnabled())
+        self.assertTrue(handle_a.enabled(ExposureCategory.DEBUG, ExposureLevel.LEVEL1))
+        self.assertEqual(len(captured), 1)
+        self.assertIn("Restored handle message", captured[0])
+
+        # 4. Global Expresso toggle off
+        captured.clear()
+        global_supplier_executed = False
+        Expresso.ON(False)
+
+        self.assertFalse(Expresso.isON())
+        self.assertFalse(Expresso.isExposed(ExposureCategory.DEBUG, ExposureLevel.LEVEL1))
+        self.assertFalse(handle_a.enabled(ExposureCategory.DEBUG, ExposureLevel.LEVEL1))
+
+        def global_supplier():
+            nonlocal global_supplier_executed
+            global_supplier_executed = True
+            return "Globally muted supplier"
+
+        handle_a.l1(ExposureCategory.DEBUG, "Globally muted handle message")
+        handle_a.l1(ExposureCategory.DEBUG, global_supplier)
+        Expresso.printf(ExposureCategory.DEBUG, ExposureLevel.LEVEL1, "Globally muted printf")
+        Expresso.NEWLINE(ExposureCategory.DEBUG, ExposureLevel.LEVEL1)
+        Expresso.LINEBREAK(ExposureCategory.DEBUG, ExposureLevel.LEVEL1)
+
+        self.assertEqual(captured, [])
+        self.assertFalse(global_supplier_executed)
+
+        # Unrestricted diagnostics remain active when globally muted
+        handle_a.err("Global off error")
+        handle_a.here("Global off here")
+
+        self.assertEqual(len(captured), 2)
+        self.assertIn("Global off error", captured[0])
+        self.assertIn("Global off here", captured[1])
+
+        # 5. Restore global switch
+        captured.clear()
+        Expresso.ON(True)
+        handle_a.l1(ExposureCategory.DEBUG, "Global restored message")
+
+        self.assertTrue(Expresso.isON())
+        self.assertEqual(len(captured), 1)
+        self.assertIn("Global restored message", captured[0])
 
     # NEWLINE / LINEBREAK
     def test_newline(self):
